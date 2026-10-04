@@ -69,6 +69,19 @@ class PersonalProject(SQLModel, table=True):
     technologies: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     has_readme: bool = True
     suggested_readme: str | None = None
+    last_pushed_at: str | None = None
+
+
+class TrackedRepo(SQLModel, table=True):
+    """Repositorios de GitHub seguidos y configurados para sincronización en SQLite."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str = Field(index=True, unique=True)  # Ej: "goofish-scraping", "CanvaToPdf"
+    branch: str | None = None  # Ej: "scraping-v2" (None usará default_branch de GitHub)
+    is_active: bool = True
+    priority: int = 1  # 1: Destacado/Principal, 2: Secundario
+    category: str | None = None  # Ej: "Backend", "AI/ML", "Web Scraping"
+    notes: str | None = None
 
 
 class Certification(SQLModel, table=True):

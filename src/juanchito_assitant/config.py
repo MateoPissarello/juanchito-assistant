@@ -10,7 +10,16 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 # AI & API Configuration
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash").strip()
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat").strip()
+
+# Specialized Models per Agent Role
+MODEL_REPO_ANALYZER = os.getenv("MODEL_REPO_ANALYZER", "qwen/qwen-2.5-coder-32b-instruct").strip()
+MODEL_LINKEDIN_PARSER = os.getenv("MODEL_LINKEDIN_PARSER", "deepseek/deepseek-chat").strip()
+MODEL_CV_WRITER = os.getenv("MODEL_CV_WRITER", "deepseek/deepseek-chat").strip()
+MODEL_EVALUATOR = os.getenv("MODEL_EVALUATOR", "typesafe/jev-router").strip()
+
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "").strip()
 
 # Paths

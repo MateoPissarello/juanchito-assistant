@@ -14,14 +14,22 @@ def get_engine(db_path: Path = DB_PATH):
 
 
 def init_db(engine=None, db_path: Path = DB_PATH) -> None:
-    """Crea todas las tablas definidas en los modelos si no existen."""
-    # Asegura que todos los modelos estén importados y registrados en SQLModel.metadata
+    """Crea todas las tablas definidas en los modelos si no existen y aplica migraciones ligeras."""
+    from sqlalchemy import text
     import juanchito_assitant.models.profile  # noqa: F401
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
     if engine is None:
         engine = get_engine(db_path)
     SQLModel.metadata.create_all(engine)
+
+    # Migración ligera automática para columnas añadidas a tablas existentes
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE personalproject ADD COLUMN last_pushed_at VARCHAR;"))
+            conn.commit()
+        except Exception:
+            pass  # La columna ya existe o la tabla se acaba de crear con ella
 
 
 @contextmanager

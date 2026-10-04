@@ -10,6 +10,7 @@ class ScoreBreakdown(BaseModel):
 class EvaluationResult(BaseModel):
     total_score: int = Field(..., ge=0, le=100)
     meets_threshold: bool
+    decision: str = Field(default="APPROVE", description="'APPROVE' si total_score >= 85, 'REWRITE' si requiere mejora.")
     breakdown: ScoreBreakdown
     strengths: list[str] = Field(default_factory=list)
     critical_weaknesses: list[str] = Field(default_factory=list)

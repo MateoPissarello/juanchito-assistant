@@ -3,6 +3,7 @@ from .profile import (
     WorkExperience,
     WorkProject,
     PersonalProject,
+    TrackedRepo,
     Certification,
     Education,
     SkillCategory,
@@ -17,6 +18,7 @@ __all__ = [
     "WorkExperience",
     "WorkProject",
     "PersonalProject",
+    "TrackedRepo",
     "Certification",
     "Education",
     "SkillCategory",
@@ -27,3 +29,4 @@ __all__ = [
     "ScoreBreakdown",
     "IterationRecord",
 ]
+

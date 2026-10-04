@@ -1,22 +1,23 @@
 import re
-from pathlib import Path
-from typing import Optional
-from sqlmodel import Session, select, delete
+
+from sqlmodel import Session, delete, select
+
 from juanchito_assitant.models.profile import (
-    PersonalInfo,
-    WorkExperience,
-    WorkProject,
-    PersonalProject,
+    AdditionalAchievement,
     Certification,
     Education,
-    SkillCategory,
-    AdditionalAchievement,
     FullProfile,
+    PersonalInfo,
+    SkillCategory,
+    WorkExperience,
+    WorkProject,
 )
+
 
 def clean_html(text: str) -> str:
     """Remueve tags HTML auxiliares de resume.lol (como <span class="spacer"></span>)."""
-    return re.sub(r'<[^>]+>', '', text).strip()
+    return re.sub(r"<[^>]+>", "", text).strip()
+
 
 def split_items_respecting_parens(text: str) -> list[str]:
     """Divide por comas pero sin romper expresiones entre paréntesis como AWS (Lambda, S3)."""
@@ -24,13 +25,13 @@ def split_items_respecting_parens(text: str) -> list[str]:
     current = []
     paren_depth = 0
     for char in text:
-        if char == '(':
+        if char == "(":
             paren_depth += 1
             current.append(char)
-        elif char == ')':
+        elif char == ")":
             paren_depth = max(0, paren_depth - 1)
             current.append(char)
-        elif char == ',' and paren_depth == 0:
+        elif char == "," and paren_depth == 0:
             item = "".join(current).strip()
             if item:
                 items.append(item)
@@ -42,16 +43,18 @@ def split_items_respecting_parens(text: str) -> list[str]:
         items.append(last_item)
     return items
 
+
 def extract_technologies_from_bullets(bullets: list[str]) -> list[str]:
     """Extrae tecnologías y términos clave en **negrita** dentro de las viñetas."""
     techs = set()
     for b in bullets:
-        matches = re.findall(r'\*\*([^*]+)\*\*', b)
+        matches = re.findall(r"\*\*([^*]+)\*\*", b)
         for m in matches:
             cleaned = m.strip()
-            if len(cleaned) > 2 and not cleaned.isdigit() and not cleaned.endswith('%'):
+            if len(cleaned) > 2 and not cleaned.isdigit() and not cleaned.endswith("%"):
                 techs.add(cleaned)
     return sorted(list(techs))
+
 
 def parse_resume_markdown(content: str) -> FullProfile:
     """
@@ -59,14 +62,14 @@ def parse_resume_markdown(content: str) -> FullProfile:
     con todas sus entidades estructuradas.
     """
     # 1. Variables de cabecera (@VAR=val1||val2)
-    raw_vars = re.findall(r'^@([A-Z_]+)=\s*([^\n\r]+)', content, re.M)
+    raw_vars = re.findall(r"^@([A-Z_]+)=\s*([^\n\r]+)", content, re.MULTILINE)
     variables: dict[str, str] = {}
     for k, v in raw_vars:
-        primary_val = v.split('||')[0].strip()
+        primary_val = v.split("||")[0].strip()
         variables[k] = primary_val
 
     # 2. Headline
-    hl_match = re.search(r'<div class="headline">\s*(.*?)\s*</div>', content, re.S)
+    hl_match = re.search(r'<div class="headline">\s*(.*?)\s*</div>', content, re.DOTALL)
     headline = hl_match.group(1).strip() if hl_match else ""
 
     # 3. PersonalInfo
@@ -79,11 +82,13 @@ def parse_resume_markdown(content: str) -> FullProfile:
         linkedin=variables.get("LINKEDIN", "mateo-pissarello"),
         github=variables.get("GITHUB", "MateoPissarello"),
         headline=headline,
-        extra_variables={k: v for k, v in variables.items() if k not in ["NAME", "TZ", "EMAIL", "PHONE", "LINKEDIN", "GITHUB"]}
+        extra_variables={
+            k: v for k, v in variables.items() if k not in ["NAME", "TZ", "EMAIL", "PHONE", "LINKEDIN", "GITHUB"]
+        },
     )
 
     # 4. Secciones Markdown (## Section)
-    sections_raw = re.findall(r'^##\s+([^\n\r]+)\n(.*?)(?=\n##\s+|\Z)', content, re.M | re.S)
+    sections_raw = re.findall(r"^##\s+([^\n\r]+)\n(.*?)(?=\n##\s+|\Z)", content, re.MULTILINE | re.DOTALL)
     sections = {title.strip(): body.strip() for title, body in sections_raw}
 
     # Profile Summary
@@ -94,9 +99,9 @@ def parse_resume_markdown(content: str) -> FullProfile:
     skills: list[SkillCategory] = []
     seen_categories = set()
     if "Skills" in sections:
-        skill_lines = [l.strip() for l in sections["Skills"].split('\n') if l.strip().startswith('-')]
+        skill_lines = [l.strip() for l in sections["Skills"].split("\n") if l.strip().startswith("-")]
         for sl in skill_lines:
-            match = re.match(r'^-\s+\*\*([^:]+):\*\*\s*(.*)$', sl)
+            match = re.match(r"^-\s+\*\*([^:]+):\*\*\s*(.*)$", sl)
             if match:
                 cat_name = match.group(1).strip()
                 # Si se repite "Languages", diferenciarlo como "Spoken Languages"
@@ -110,32 +115,32 @@ def parse_resume_markdown(content: str) -> FullProfile:
     # Experience & WorkProjects
     experiences: list[WorkExperience] = []
     if "Experience" in sections:
-        exp_blocks = re.split(r'\n###\s+', '\n' + sections["Experience"])[1:]
+        exp_blocks = re.split(r"\n###\s+", "\n" + sections["Experience"])[1:]
         for idx, block in enumerate(exp_blocks, start=1):
-            lines = [l.rstrip() for l in block.strip().split('\n') if l.strip()]
+            lines = [l.rstrip() for l in block.strip().split("\n") if l.strip()]
             if not lines:
                 continue
 
             # Línea 1: Rol y Fechas
             role_line = lines[0]
-            role_parts = re.split(r'<span[^>]*>', role_line)
+            role_parts = re.split(r"<span[^>]*>", role_line)
             role = clean_html(role_parts[0]).strip()
             date_match = re.search(r'<span class="normal">\s*(.*?)\s*</span>', role_line)
             date_range = date_match.group(1).strip() if date_match else ""
-            
+
             start_date, end_date = date_range, "Present"
-            if '–' in date_range:
-                parts = [p.strip() for p in date_range.split('–')]
+            if "–" in date_range:
+                parts = [p.strip() for p in date_range.split("–")]
                 start_date, end_date = parts[0], parts[1]
-            elif '-' in date_range:
-                parts = [p.strip() for p in date_range.split('-')]
+            elif "-" in date_range:
+                parts = [p.strip() for p in date_range.split("-")]
                 start_date, end_date = parts[0], parts[1]
 
             # Línea 2: Empresa y Ubicación (#### Empresa <span...> Ubicacion)
             company, location = "", ""
-            if len(lines) > 1 and lines[1].startswith('####'):
-                comp_line = re.sub(r'^####\s*', '', lines[1])
-                comp_parts = re.split(r'<span[^>]*>', comp_line)
+            if len(lines) > 1 and lines[1].startswith("####"):
+                comp_line = re.sub(r"^####\s*", "", lines[1])
+                comp_parts = re.split(r"<span[^>]*>", comp_line)
                 company = clean_html(comp_parts[0]).strip()
                 location = clean_html(comp_parts[-1]).strip() if len(comp_parts) > 1 else ""
 
@@ -147,27 +152,22 @@ def parse_resume_markdown(content: str) -> FullProfile:
                 end_date=end_date,
                 is_current=("Present" in end_date.lower()),
                 order_index=idx,
-                projects=[]
+                projects=[],
             )
 
             # Extraer iniciativas técnicas (- **NombreIniciativa**)
-            proj_blocks = re.split(r'\n-\s+\*\*', '\n' + '\n'.join(lines[2:]))[1:]
+            proj_blocks = re.split(r"\n-\s+\*\*", "\n" + "\n".join(lines[2:]))[1:]
             for p_raw in proj_blocks:
-                p_lines = p_raw.strip().split('\n')
-                p_name = p_lines[0].replace('**', '').strip()
+                p_lines = p_raw.strip().split("\n")
+                p_name = p_lines[0].replace("**", "").strip()
                 bullets: list[str] = []
                 for bl in p_lines[1:]:
-                    bl_clean = re.sub(r'^\s*-\s*', '', bl).strip()
+                    bl_clean = re.sub(r"^\s*-\s*", "", bl).strip()
                     if bl_clean:
                         bullets.append(bl_clean)
 
                 techs = extract_technologies_from_bullets(bullets)
-                work_proj = WorkProject(
-                    name=p_name,
-                    bullets=bullets,
-                    technologies=techs,
-                    priority_weight=1
-                )
+                work_proj = WorkProject(name=p_name, bullets=bullets, technologies=techs, priority_weight=1)
                 exp.projects.append(work_proj)
 
             experiences.append(exp)
@@ -175,90 +175,85 @@ def parse_resume_markdown(content: str) -> FullProfile:
     # Courses & Certifications
     certifications: list[Certification] = []
     if "Courses & Certifications" in sections:
-        cert_groups = re.split(r'\n###\s+', '\n' + sections["Courses & Certifications"])[1:]
+        cert_groups = re.split(r"\n###\s+", "\n" + sections["Courses & Certifications"])[1:]
         for g in cert_groups:
-            lines = [l.strip() for l in g.strip().split('\n') if l.strip()]
+            lines = [l.strip() for l in g.strip().split("\n") if l.strip()]
             if not lines:
                 continue
             issuer = lines[0].strip()
             for cl in lines[1:]:
-                if cl.startswith('####'):
-                    c_clean = re.sub(r'^####\s*', '', cl)
+                if cl.startswith("####"):
+                    c_clean = re.sub(r"^####\s*", "", cl)
                     date_match = re.search(r'<span class="normal">\s*(.*?)\s*</span>', c_clean)
                     issue_date = date_match.group(1).strip() if date_match else ""
-                    title = clean_html(re.split(r'<span', c_clean)[0]).strip()
-                    certifications.append(Certification(
-                        issuer=issuer,
-                        title=title,
-                        issue_date=issue_date
-                    ))
+                    title = clean_html(re.split(r"<span", c_clean)[0]).strip()
+                    certifications.append(Certification(issuer=issuer, title=title, issue_date=issue_date))
 
     # Education
     education_list: list[Education] = []
     if "Education" in sections:
-        edu_blocks = re.split(r'\n###\s+', '\n' + sections["Education"])[1:]
+        edu_blocks = re.split(r"\n###\s+", "\n" + sections["Education"])[1:]
         for ed in edu_blocks:
-            lines = [l.strip() for l in ed.strip().split('\n') if l.strip()]
+            lines = [l.strip() for l in ed.strip().split("\n") if l.strip()]
             if not lines:
                 continue
             inst_clean = lines[0]
             date_match = re.search(r'<span class="normal">\s*(.*?)\s*</span>', inst_clean)
             date_range = date_match.group(1).strip() if date_match else ""
-            institution = clean_html(re.split(r'<span', inst_clean)[0]).strip()
+            institution = clean_html(re.split(r"<span", inst_clean)[0]).strip()
 
             degree, loc = "", ""
-            if len(lines) > 1 and lines[1].startswith('####'):
-                d_clean = re.sub(r'^####\s*', '', lines[1])
-                parts = re.split(r'<span[^>]*>', d_clean)
+            if len(lines) > 1 and lines[1].startswith("####"):
+                d_clean = re.sub(r"^####\s*", "", lines[1])
+                parts = re.split(r"<span[^>]*>", d_clean)
                 degree = clean_html(parts[0]).strip()
                 loc = clean_html(parts[-1]).strip() if len(parts) > 1 else ""
 
-            education_list.append(Education(
-                institution=institution,
-                degree=degree,
-                date_range=date_range,
-                location=loc
-            ))
+            education_list.append(
+                Education(institution=institution, degree=degree, date_range=date_range, location=loc)
+            )
 
     # Additional
     additional_list: list[AdditionalAchievement] = []
     if "Additional" in sections:
-        add_blocks = re.split(r'\n###\s+', '\n' + sections["Additional"])[1:]
+        add_blocks = re.split(r"\n###\s+", "\n" + sections["Additional"])[1:]
         for ab in add_blocks:
-            lines = [l.strip() for l in ab.strip().split('\n') if l.strip()]
+            lines = [l.strip() for l in ab.strip().split("\n") if l.strip()]
             if not lines:
                 continue
             cat_clean = lines[0]
             date_match = re.search(r'<span class="normal">\s*(.*?)\s*</span>', cat_clean)
             date_range = date_match.group(1).strip() if date_match else ""
-            category_title = clean_html(re.split(r'<span', cat_clean)[0]).strip()
+            category_title = clean_html(re.split(r"<span", cat_clean)[0]).strip()
 
             inst, loc = "", ""
-            if len(lines) > 1 and lines[1].startswith('####'):
-                i_clean = re.sub(r'^####\s*', '', lines[1])
-                parts = re.split(r'<span[^>]*>', i_clean)
+            if len(lines) > 1 and lines[1].startswith("####"):
+                i_clean = re.sub(r"^####\s*", "", lines[1])
+                parts = re.split(r"<span[^>]*>", i_clean)
                 inst = clean_html(parts[0]).strip()
                 loc = clean_html(parts[-1]).strip() if len(parts) > 1 else ""
 
             bullets: list[str] = []
             links: list[dict[str, str]] = []
             for al in lines[2:]:
-                clean_bullet = re.sub(r'^\s*-\s*', '', al).strip()
+                clean_bullet = re.sub(r"^\s*-\s*", "", al).strip()
                 if clean_bullet:
-                    found_links = re.findall(r'\[([^\]]+)\]\(([^)]+)\)', clean_bullet)
+                    found_links = re.findall(r"\[([^\]]+)\]\(([^)]+)\)", clean_bullet)
                     for label, url in found_links:
-                        links.append({"label": label.strip('{}'), "url": url})
+                        links.append({"label": label.strip("{}"), "url": url})
                     bullets.append(clean_bullet)
 
-            additional_list.append(AdditionalAchievement(
-                category="Programming Contest",
-                title=category_title,
-                institution=inst,
-                location=loc,
-                date_range=date_range,
-                description_bullets=bullets,
-                links=links
-            ))
+            additional_list.append(
+                AdditionalAchievement(
+                    category="Programming Contest",
+                    title=category_title,
+                    institution=inst,
+                    location=loc,
+                    date_range=date_range,
+                    description_bullets=bullets,
+                    links=links,
+                )
+            )
 
     return FullProfile(
         personal=personal,
@@ -267,8 +262,9 @@ def parse_resume_markdown(content: str) -> FullProfile:
         certifications=certifications,
         education=education_list,
         skills=skills,
-        additional_achievements=additional_list
+        additional_achievements=additional_list,
     )
+
 
 def seed_database_from_profile(profile: FullProfile, session: Session) -> None:
     """
@@ -302,7 +298,7 @@ def seed_database_from_profile(profile: FullProfile, session: Session) -> None:
     # 3. Insertar Experiencias e Iniciativas
     for exp in profile.experiences:
         session.add(exp)
-    
+
     # 4. Certificaciones, Educación, Skills y Additional
     for cert in profile.certifications:
         session.add(cert)

@@ -20,6 +20,7 @@ wheels/
 .pytest_cache/
 .coverage
 data/outputs/
+*.pdf
 
 # Local Developer Logbook & Notes
 LOGBOOK.md
