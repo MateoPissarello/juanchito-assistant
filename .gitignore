@@ -11,6 +11,9 @@ wheels/
 .env
 *.env
 
+# Node.js
+node_modules/
+
 # SQLite databases
 *.db
 *.sqlite
@@ -24,6 +27,8 @@ data/outputs/
 
 # Local Developer Logbook & Notes
 LOGBOOK.md
+.agents/
+.agent/
 
 # IDE & Editor files
 .vscode/

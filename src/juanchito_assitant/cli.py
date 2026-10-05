@@ -636,6 +636,43 @@ def seed(
 
 
 # ----------------------------------------------------------------------
+# 7. COMANDO: WEB (Servidor Web & Profile Workbench)
+# ----------------------------------------------------------------------
+@app.command()
+def web(
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Dirección host del servidor web"),
+    port: int = typer.Option(8000, "--port", "-p", help="Puerto HTTP"),
+    reload: bool = typer.Option(False, "--reload", help="Habilitar autoreload para desarrollo"),
+    open_browser: bool = typer.Option(True, "--open/--no-open", help="Abrir automáticamente el navegador"),
+):
+    """Inicia la interfaz web interactiva (FastAPI + React Studio)."""
+    import threading
+    import time
+    import webbrowser
+    import uvicorn
+
+    url = f"http://{host}:{port}"
+    console.print(
+        Panel.fit(
+            f"[bold cyan]🌐 Juanchito Assistant Web Studio & Workbench[/bold cyan]\n"
+            f"[dim]Servidor escuchando en:[/] [bold green]{url}[/bold green]\n"
+            f"[dim]API Swagger:[/] [cyan]{url}/docs[/cyan]\n"
+            f"[dim]Presiona [bold]Ctrl+C[/bold] para detener el servidor.[/dim]",
+            border_style="cyan",
+        )
+    )
+
+    if open_browser:
+        def _open():
+            time.sleep(1.0)
+            webbrowser.open(url)
+
+        threading.Thread(target=_open, daemon=True).start()
+
+    uvicorn.run("juanchito_assitant.web.app:app", host=host, port=port, reload=reload)
+
+
+# ----------------------------------------------------------------------
 # Punto de Entrada Principal
 # ----------------------------------------------------------------------
 def main():
@@ -644,3 +681,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

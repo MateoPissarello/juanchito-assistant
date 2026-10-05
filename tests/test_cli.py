@@ -22,6 +22,15 @@ def test_cli_help():
     assert "audit" in result.stdout
     assert "repo" in result.stdout
     assert "sync" in result.stdout
+    assert "web" in result.stdout
+
+
+def test_cli_web_help():
+    result = runner.invoke(app, ["web", "--help"])
+    assert result.exit_code == 0
+    assert "--port" in result.stdout
+    assert "--host" in result.stdout
+
 
 
 def test_cli_status():
