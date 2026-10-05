@@ -1,33 +1,33 @@
-# 🎯 juanchito-assitant
+# juanchito-assitant
 
 > **Generador y adaptador inteligente de currículums técnicos para [resume.lol](https://resume.lol)**  
 > Construido con arquitectura Multi-Agente, evaluación crítica ATS (Jev Router), ingesta no destructiva desde GitHub y LinkedIn, interfaz web en tiempo real (FastAPI + React 19) y terminal interactiva (Typer + Rich).
 
 ---
 
-## 📑 Tabla de Contenidos
+## Tabla de Contenidos
 
-1. [Visión General y Propósito](#-visión-general-y-propósito)
-2. [Características Principales](#-características-principales)
-3. [Arquitectura del Sistema](#-arquitectura-del-sistema)
+1. [Visión General y Propósito](#visión-general-y-propósito)
+2. [Características Principales](#características-principales)
+3. [Arquitectura del Sistema](#arquitectura-del-sistema)
    - [Diagrama de Flujo del Pipeline](#diagrama-de-flujo-del-pipeline)
    - [Bucle Reflexivo de Mejora Continua](#bucle-reflexivo-de-mejora-continua)
    - [Modelo de Datos Relacional](#modelo-de-datos-relacional)
-4. [Requisitos Previos](#-requisitos-previos)
-5. [Instalación y Configuración](#-instalación-y-configuración)
-6. [Guía de Uso Rápido (Getting Started)](#-guía-de-uso-rápido-getting-started)
+4. [Requisitos Previos](#requisitos-previos)
+5. [Instalación y Configuración](#instalación-y-configuración)
+6. [Guía de Uso Rápido (Getting Started)](#guía-de-uso-rápido-getting-started)
    - [1. Siembra de Datos Inicial](#1-siembra-de-datos-inicial)
    - [2. Sincronización Inteligente de Fuentes](#2-sincronización-inteligente-de-fuentes)
    - [3. Adaptación de CV desde la Terminal](#3-adaptación-de-cv-desde-la-terminal)
    - [4. Interfaz Web Studio & Workbench](#4-interfaz-web-studio--workbench)
-7. [Referencia Completa de Comandos CLI](#-referencia-completa-de-comandos-cli)
-8. [Estructura del Proyecto](#-estructura-del-proyecto)
-9. [Pruebas Automatizadas y Calidad](#-pruebas-automatizadas-y-calidad)
-10. [Autor y Licencia](#-autor-y-licencia)
+7. [Referencia Completa de Comandos CLI](#referencia-completa-de-comandos-cli)
+8. [Estructura del Proyecto](#estructura-del-proyecto)
+9. [Pruebas Automatizadas y Calidad](#pruebas-automatizadas-y-calidad)
+10. [Autor y Licencia](#autor-y-licencia)
 
 ---
 
-## 🌟 Visión General y Propósito
+## Visión General y Propósito
 
 En el competitivo mercado de ingeniería de software, enviar currículums genéricos o sin cuantificar reduce drásticamente la tasa de conversión en los filtros de sistemas ATS (_Applicant Tracking Systems_) y en la lectura rápida de los reclutadores técnicos.
 
@@ -40,32 +40,32 @@ En el competitivo mercado de ingeniería de software, enviar currículums genér
 
 ---
 
-## ✨ Características Principales
+## Características Principales
 
-- **🤖 Pipeline Multi-Agente Especializado**:
+- **Pipeline Multi-Agente Especializado**:
   - `JobAnalyzerAgent`: Extrae rol, seniority, palabras clave ATS y habilidades obligatorias (_must-have_) y deseables (_nice-to-have_).
   - `MatcherAgent`: Algoritmo de scoring ponderado que ranquea qué proyectos empresariales y proyectos personales de GitHub responden mejor a la vacante.
   - `WriterAgent`: Redacta titulares profesionales, resúmenes técnicos y viñetas cuantificadas Google XYZ respetando límites de extensión para 1 página.
   - `EvaluatorAgent (Jev Router)`: Sistema crítico de auditoría ATS que califica en 5 dimensiones (Match de palabras clave, Relevancia del rol, Impacto cuantificable, Integridad factual y Formato).
-- **🌐 Soporte Bilingüe Nativo (Inglés / Español)**:
+- **Soporte Bilingüe Nativo (Inglés / Español)**:
   - Generación de currículums tanto en inglés como en español profesional con preservación de términos técnicos universales (_FastAPI, Docker, Kubernetes, AWS_).
   - Configurable en Web Studio (`[ EN | ES ]`) y CLI (`-l es`).
-- **⚡ Ingesta Inteligente y Concurrente de GitHub**:
+- **Ingesta Inteligente y Concurrente de GitHub**:
   - Inspección asíncrona de árboles de código y manifiestos (`pyproject.toml`, `package.json`, `Cargo.toml`, etc.).
   - **Detección inteligente de cambios vía `pushed_at`**: Si no hay commits nuevos, omite el repositorio en milisegundos (< 1s para 28 repositorios).
   - Auditoría de documentación: Si un repositorio no tiene README o es trivial, la IA sintetiza un `README.md` profesional completo.
-- **📄 Importador No Destructivo de LinkedIn (PDF)**:
+- **Importador No Destructivo de LinkedIn (PDF)**:
   - Extrae texto con `pypdf` y estructura la información con LLM.
   - Compara contra SQLite mediante diffing no destructivo: agrega certificaciones, educación o roles nuevos sin sobrescribir iniciativas existentes.
-- **💻 Interfaz Web Studio & Profile Workbench**:
+- **Interfaz Web Studio & Profile Workbench**:
   - Backend en **FastAPI** con **Server-Sent Events (SSE)** para observar en tiempo real cada iteración del bucle reflexivo.
   - Frontend moderno en **React 19 + Tailwind CSS v4 + Vite**: editor visual de perfil, estudio de adaptación lado a lado, scorecard visual ATS y descarga directa en `.md`.
-- **🛠️ Terminal Interactiva de Alta Fidelidad**:
+- **Terminal Interactiva de Alta Fidelidad**:
   - Construida con **Typer** y **Rich**: paneles a color, diagnósticos de conectividad, tablas de repositorios y confirmaciones interactivas.
 
 ---
 
-## 🏛️ Arquitectura del Sistema
+## Arquitectura del Sistema
 
 ### Diagrama de Flujo del Pipeline
 
@@ -220,7 +220,7 @@ erDiagram
 
 ---
 
-## 📋 Requisitos Previos
+## Requisitos Previos
 
 - **Python**: Versión `>= 3.11`
 - **Gestor de Paquetes**: [`uv`](https://docs.astral.sh/uv/) (estándar moderno de empaquetado ultrarrápido en Rust).
@@ -232,7 +232,7 @@ erDiagram
 
 ---
 
-## 🚀 Instalación y Configuración
+## Instalación y Configuración
 
 ### 1. Clonar el repositorio
 
@@ -283,7 +283,7 @@ cd ..
 
 ---
 
-## 🎯 Guía de Uso Rápido (Getting Started)
+## Guía de Uso Rápido (Getting Started)
 
 ### 1. Siembra de Datos Inicial
 
@@ -313,9 +313,9 @@ Se desplegará el menú:
 La consola mostrará eventos en vivo con salto automático de repositorios sin cambios:
 
 ```text
-  ⏩ goofish-scraping: Omitido (sin commits nuevos desde 2026-01-29)
-  🤖 cine_colombia: Analizando código con IA (Nuevo repositorio)...
-  ✓ cine_colombia: Guardado con éxito (4 viñetas XYZ, 15 tecnologías)
+  [OMITIDO] goofish-scraping: sin commits nuevos desde 2026-01-29
+  [ANALIZANDO] cine_colombia: analizando código con IA (nuevo repositorio)...
+  [OK] cine_colombia: guardado con éxito (4 viñetas XYZ, 15 tecnologías)
 ```
 
 ### 3. Adaptación de CV desde la Terminal
@@ -345,7 +345,7 @@ Al terminar, la CLI mostrará el **Scorecard ATS**:
 │ • Factual Integrity:    14 / 15                      │
 │ • Format & Length:      12 / 15                      │
 ╰─────────────────────────────────────────────────────╯
-✓ Currículum guardado en: data/outputs/resume_tailored_senior_backend.md
+[OK] Currículum guardado en: data/outputs/resume_tailored_senior_backend.md
 ```
 
 ### 4. Interfaz Web Studio & Workbench
@@ -362,7 +362,7 @@ uv run juanchito web
 
 ---
 
-## 💻 Referencia Completa de Comandos CLI
+## Referencia Completa de Comandos CLI
 
 El comando maestro es `juanchito` (o `uv run juanchito`):
 
@@ -383,7 +383,7 @@ El comando maestro es `juanchito` (o `uv run juanchito`):
 
 ---
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```text
 juanchito-assitant/
@@ -450,7 +450,7 @@ juanchito-assitant/
 
 ---
 
-## 🧪 Pruebas Automatizadas y Calidad
+## Pruebas Automatizadas y Calidad
 
 El proyecto mantiene una cobertura integral en todas sus capas (Base de datos, Clientes HTTP, Ingesta, Agentes, Renderizado, API REST y CLI interactiva).
 
@@ -484,7 +484,7 @@ tests/test_web_api.py .......                                            [100%]
 
 ---
 
-## 👤 Autor y Licencia
+## Autor y Licencia
 
 - **Lead Developer**: Mateo Pissarello ([@MateoPissarello](https://github.com/MateoPissarello))
 - **Licencia**: Distribuido bajo la licencia [MIT](LICENSE).
