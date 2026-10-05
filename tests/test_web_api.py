@@ -180,3 +180,62 @@ def test_skills_and_certifications_crud(client):
     # Delete skill category
     del_skill = client.delete(f"/api/profile/skills/{cat_id}")
     assert del_skill.status_code == 200
+
+
+def test_tailor_stream_empty_input_error(client):
+    res = client.post("/api/tailor/stream", json={"job_input": "   "})
+    assert res.status_code == 400
+    assert "Debe ingresar" in res.json()["detail"]
+
+
+def test_tailor_stream_success(client, tmp_path):
+    from unittest.mock import patch
+    from juanchito_assitant.models.evaluation import EvaluationResult, ScoreBreakdown
+    from juanchito_assitant.models.job import JobRequirements
+    from juanchito_assitant.tailor_engine import TailoringReport
+
+    mock_job = JobRequirements(
+        job_title="Backend Engineer",
+        company_name="Acme Corp",
+        role_summary="Building APIs",
+        must_have_skills=["Python"],
+    )
+    mock_eval = EvaluationResult(
+        total_score=92,
+        decision="APPROVE",
+        meets_threshold=True,
+        breakdown=ScoreBreakdown(
+            ats_keyword_match=25,
+            role_relevance=25,
+            quantifiable_impact=18,
+            factual_integrity=12,
+            format_and_length=12,
+        ),
+    )
+    mock_report = TailoringReport(
+        job=mock_job,
+        final_markdown="# Mateo Pissarello\n## Profile\nEngineer",
+        final_evaluation=mock_eval,
+        iterations=[],
+        output_file_path=tmp_path / "resume.md",
+    )
+
+    async def fake_run(self, job_input, max_iterations=2, language="en", on_progress=None):
+        if on_progress:
+            await on_progress("analyzing", {"message": f"Analizando vacante ({language})..."})
+            await on_progress("completed", {"report": mock_report.model_dump(mode="json")})
+        return mock_report
+
+    with patch("juanchito_assitant.web.api.TailoringEngine.run", new=fake_run):
+        res = client.post(
+            "/api/tailor/stream",
+            json={"job_input": "Backend Engineer at Acme", "language": "es"},
+        )
+        assert res.status_code == 200
+        assert "text/event-stream" in res.headers["content-type"]
+        body = res.text
+        assert "data: " in body
+        assert "es" in body
+        assert "completed" in body
+
+

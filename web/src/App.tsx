@@ -9,7 +9,7 @@ import { NewCompanyCanvas } from './components/views/NewCompanyCanvas';
 import { ReposCanvas } from './components/views/ReposCanvas';
 import { SkillsCanvas } from './components/views/SkillsCanvas';
 import { CertsCanvas } from './components/views/CertsCanvas';
-import { TailoringPlaceholder } from './components/TailoringPlaceholder';
+import { TailoringStudioCanvas } from './components/views/TailoringStudioCanvas';
 import type { FullProfileData, WorkExperience } from './types/profile';
 import { api } from './services/api';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
@@ -60,7 +60,7 @@ export const WorkbenchApp: React.FC = () => {
     if (nav.view === 'repos') return ['profile.db', 'tracked_repositories'];
     if (nav.view === 'skills') return ['profile.db', 'skill_matrix'];
     if (nav.view === 'certs') return ['profile.db', 'certifications'];
-    if (nav.view === 'tailor') return ['studio', 'tailor_engine', 'jev_router'];
+    if (nav.view === 'tailor') return ['studio', 'tailor', 'ats_optimizer'];
     if (nav.view === 'experience') {
       if (isCreatingCompany) return ['profile.db', 'experiences', 'new_company'];
       const exp = profile.experiences.find((e) => e.id === nav.expId);
@@ -229,7 +229,7 @@ export const WorkbenchApp: React.FC = () => {
                 />
               )}
 
-              {nav.view === 'tailor' && <TailoringPlaceholder />}
+              {nav.view === 'tailor' && <TailoringStudioCanvas />}
             </div>
           )}
         </main>

@@ -87,3 +87,11 @@ class CertificationUpdate(BaseModel):
     issuer: str | None = None
     title: str | None = None
     issue_date: str | None = None
+
+
+class TailorStreamRequest(BaseModel):
+    job_input: str = Field(description="URL de la vacante o texto de la descripción del rol")
+    max_iterations: int = Field(default=2, ge=1, le=3)
+    language: str = Field(default="en", description="Idioma del currículum: 'en' o 'es'")
+
+

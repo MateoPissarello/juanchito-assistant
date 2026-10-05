@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 from sqlmodel import Session, select
 from juanchito_assitant.db.database import get_engine, get_session
 from juanchito_assitant.ingest.github_client import GitHubClient
@@ -53,6 +54,7 @@ class GitHubIngestService:
         repo: dict,
         session: Session | None = None,
         force: bool = False,
+        on_status: Callable[[str, str, str], None] | None = None,
     ) -> tuple[PersonalProject, bool]:
         """Inspecciona un repositorio individual.
 
@@ -92,7 +94,25 @@ class GitHubIngestService:
             and existing_proj.last_pushed_at
             and existing_proj.last_pushed_at == pushed_at
         ):
+            if on_status:
+                date_str = str(pushed_at)[:10] if pushed_at else "al día"
+                on_status(repo_name, "skipped", f"Omitido (sin commits nuevos desde {date_str})")
             return existing_proj, False
+
+        # Determinar razón del análisis con IA
+        if not existing_proj:
+            reason = "Nuevo repositorio"
+        elif force:
+            reason = "Modo --force activado"
+        elif not existing_proj.last_pushed_at:
+            reason = "Sin fecha previa de pushed_at en SQLite"
+        else:
+            old_d = str(existing_proj.last_pushed_at)[:10]
+            new_d = str(pushed_at)[:10] if pushed_at else "nuevo"
+            reason = f"Nuevos commits detectados ({old_d} -> {new_d})"
+
+        if on_status:
+            on_status(repo_name, "analyzing", f"Analizando código con IA ({reason})...")
 
         # 2. Inspeccionar árbol, README y manifiestos en GitHub
         ctx = await self.github_client.inspect_repo(
@@ -149,6 +169,11 @@ class GitHubIngestService:
             with get_session(self.engine) as sess:
                 saved = _persist(sess)
 
+        if on_status:
+            b_cnt = len(analysis.bullets) if analysis.bullets else 0
+            t_cnt = len(analysis.technologies) if analysis.technologies else 0
+            on_status(repo_name, "completed", f"Guardado con éxito ({b_cnt} viñetas XYZ, {t_cnt} tecnologías)")
+
         return saved, True
 
     async def sync_all(
@@ -159,6 +184,7 @@ class GitHubIngestService:
         max_concurrency: int = 3,
         repo_names: list[str] | None = None,
         force: bool = False,
+        on_status: Callable[[str, str, str], None] | None = None,
     ) -> list[tuple[PersonalProject, bool]]:
         """Sincroniza múltiples repositorios concurrentemente controlados por semáforo."""
         repos = await self.github_client.list_repos(
@@ -176,6 +202,12 @@ class GitHubIngestService:
         # Filtrar por lista específica si se proporciona
         if repo_names:
             names_set = {n.lower() for n in repo_names}
+            found_names = {r.get("name", "").lower() for r in repos}
+            if on_status:
+                for req_name in repo_names:
+                    if req_name.lower() not in found_names:
+                        on_status(req_name, "not_found", "No encontrado en GitHub (verifica nombre o permisos)")
+
             repos = [r for r in repos if r.get("name", "").lower() in names_set]
 
         # Filtrar repositorios explícitamente excluidos en configuración o SQLite
@@ -186,16 +218,18 @@ class GitHubIngestService:
                 continue
             filtered_repos.append(r)
 
-
         semaphore = asyncio.Semaphore(max_concurrency)
 
         async def _worker(r: dict) -> tuple[PersonalProject, bool] | None:
             async with semaphore:
                 try:
-                    return await self.sync_repo(r, force=force)
+                    return await self.sync_repo(r, force=force, on_status=on_status)
                 except Exception as e:
                     repo_title = r.get("name", "unknown")
-                    print(f"Advertencia: no se pudo sincronizar el repositorio '{repo_title}': {e}")
+                    if on_status:
+                        on_status(repo_title, "error", f"Error durante análisis: {e}")
+                    else:
+                        print(f"Advertencia: no se pudo sincronizar el repositorio '{repo_title}': {e}")
                     return None
 
         tasks = [_worker(r) for r in filtered_repos]

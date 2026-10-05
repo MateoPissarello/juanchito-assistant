@@ -202,3 +202,50 @@ async def test_sync_all_resolves_targets_from_tracked_repo_table():
     assert project.branch == "v2"
     assert was_updated is True
 
+
+@pytest.mark.anyio
+async def test_sync_all_on_status_reporting():
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+
+    mock_gh = MagicMock(spec=GitHubClient)
+    mock_gh.list_repos = AsyncMock(
+        return_value=[
+            {"name": "repo-a", "owner": {"login": "MateoPissarello"}, "default_branch": "main", "pushed_at": "2026-01-01T00:00:00Z"},
+        ]
+    )
+    mock_gh.inspect_repo = AsyncMock(
+        return_value=RepoContext(repo_name="repo-a", owner="MateoPissarello", branch="main")
+    )
+
+    mock_analyzer = MagicMock(spec=RepoAnalyzer)
+    mock_analyzer.analyze = AsyncMock(
+        return_value=RepoAnalysisResult(
+            has_adequate_readme=True,
+            summary="Repo A summary",
+            bullets=["Bullet 1"],
+            technologies=["Python"],
+            suggested_readme=None,
+        )
+    )
+
+    service = GitHubIngestService(
+        github_client=mock_gh,
+        analyzer=mock_analyzer,
+        engine=engine,
+        overrides={"repo-a": {"include": True}},
+    )
+
+    events = []
+    def tracker(repo, status, msg):
+        events.append((repo, status, msg))
+
+    await service.sync_all(username="MateoPissarello", repo_names=["repo-a", "repo-missing"], on_status=tracker)
+
+    # Debe reportar not_found para repo-missing
+    assert any(e[0] == "repo-missing" and e[1] == "not_found" for e in events)
+    # Debe reportar analyzing y completed para repo-a
+    assert any(e[0] == "repo-a" and e[1] == "analyzing" for e in events)
+    assert any(e[0] == "repo-a" and e[1] == "completed" for e in events)
+
+

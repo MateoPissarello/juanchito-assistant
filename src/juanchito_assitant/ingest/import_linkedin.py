@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+from typing import Annotated
 
 from rich.console import Console
 from rich.panel import Panel
@@ -25,6 +26,8 @@ async def _run_import(
     provider: str | None,
 ):
     init_db()
+    if not isinstance(pdf_path, Path):
+        pdf_path = Path(str(pdf_path))
 
     console.print(
         Panel.fit(
@@ -143,33 +146,43 @@ async def _run_import(
 
 @app.command()
 def main(
-    pdf_path: Path = typer.Argument(
-        DATA_DIR / "linkedin_profile.pdf",
-        help="Ruta al archivo PDF exportado desde LinkedIn.",
-    ),
-    dry_run: bool = typer.Option(
-        False,
-        "--dry-run",
-        "-d",
-        help="Previsualiza los cambios sin persistir en profile.db.",
-    ),
-    yes: bool = typer.Option(
-        False,
-        "--yes",
-        "-y",
-        help="Aplica los cambios automáticamente sin pedir confirmación interactiva.",
-    ),
-    include_non_technical: bool = typer.Option(
-        False,
-        "--include-non-technical",
-        help="Incluye roles no técnicos (ej. atención al cliente).",
-    ),
-    provider: str | None = typer.Option(
-        None,
-        "--provider",
-        "-p",
-        help="Proveedor de LLM ('openrouter' o 'gemini').",
-    ),
+    pdf_path: Annotated[
+        Path,
+        typer.Argument(
+            help="Ruta al archivo PDF exportado desde LinkedIn.",
+        ),
+    ] = DATA_DIR / "linkedin_profile.pdf",
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            "-d",
+            help="Previsualiza los cambios sin persistir en profile.db.",
+        ),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Aplica los cambios automáticamente sin pedir confirmación interactiva.",
+        ),
+    ] = False,
+    include_non_technical: Annotated[
+        bool,
+        typer.Option(
+            "--include-non-technical",
+            help="Incluye roles no técnicos (ej. atención al cliente).",
+        ),
+    ] = False,
+    provider: Annotated[
+        str | None,
+        typer.Option(
+            "--provider",
+            "-p",
+            help="Proveedor de LLM ('openrouter' o 'gemini').",
+        ),
+    ] = None,
 ):
     """Importa y enriquece tu base de datos profile.db a partir de un PDF de LinkedIn."""
     asyncio.run(

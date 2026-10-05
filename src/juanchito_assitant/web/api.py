@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import asyncio
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 
 from juanchito_assitant.db.database import get_session
@@ -13,12 +17,14 @@ from juanchito_assitant.models.profile import (
     WorkExperience,
     WorkProject,
 )
+from juanchito_assitant.tailor_engine import TailoringEngine
 from juanchito_assitant.web.schemas import (
     CertificationCreate,
     CertificationUpdate,
     PersonalInfoUpdate,
     SkillCategoryCreate,
     SkillCategoryUpdate,
+    TailorStreamRequest,
     TrackedRepoCreate,
     TrackedRepoUpdate,
     WorkExperienceCreate,
@@ -366,3 +372,72 @@ def health_check(db: Session = Depends(get_db)):
             "work_projects": proj_count,
         },
     }
+
+
+# --- Tailoring Studio (SSE Streaming) ---
+
+
+@router.post("/tailor/stream")
+async def tailor_resume_stream(
+    payload: TailorStreamRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Adapta el currículum a una vacante emitiendo progreso paso a paso mediante Server-Sent Events (SSE)."""
+    if not payload.job_input.strip():
+        raise HTTPException(status_code=400, detail="Debe ingresar una URL o el texto de la vacante")
+
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    async def on_progress(event_type: str, data: dict):
+        payload_data = {"type": event_type, **data}
+        await queue.put(json.dumps(payload_data, ensure_ascii=False))
+
+    async def run_pipeline():
+        try:
+            engine = TailoringEngine(session=db)
+            await engine.run(
+                job_input=payload.job_input,
+                max_iterations=payload.max_iterations,
+                language=payload.language,
+                on_progress=on_progress,
+            )
+        except Exception as exc:
+            error_data = {
+                "type": "error",
+                "message": f"Error durante la optimización: {exc!s}",
+            }
+            await queue.put(json.dumps(error_data, ensure_ascii=False))
+        finally:
+            await queue.put(None)
+
+    async def event_generator():
+        task = asyncio.create_task(run_pipeline())
+        try:
+            while True:
+                if await request.is_disconnected():
+                    task.cancel()
+                    break
+
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=1.0)
+                except TimeoutError:
+                    continue
+
+                if item is None:
+                    break
+
+                yield f"data: {item}\n\n"
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

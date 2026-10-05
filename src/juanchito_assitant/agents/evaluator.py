@@ -28,7 +28,12 @@ class EvaluatorAgent:
         if not self.api_key:
             raise ValueError("OPENROUTER_API_KEY es obligatoria para utilizar el modelo de evaluación Jev.")
 
-    def _build_evaluation_prompt(self, resume_markdown: str, job: JobRequirements) -> str:
+    def _build_evaluation_prompt(
+        self,
+        resume_markdown: str,
+        job: JobRequirements,
+        language: str = "en",
+    ) -> str:
         word_count = len(resume_markdown.split())
         return (
             "Evaluate this candidate's tailored resume against the target job requirements using the strict ATS 100-point Rubric:\n\n"
@@ -38,6 +43,9 @@ class EvaluatorAgent:
             f"NICE-TO-HAVE SKILLS: {', '.join(job.nice_to_have_skills)}\n"
             f"ATS KEYWORDS: {', '.join(job.ats_keywords)}\n"
             f"ROLE SUMMARY: {job.role_summary}\n\n"
+            f"TARGET RESUME LANGUAGE: {language.upper()}\n"
+            f"(Note: The resume was generated in {language.upper()}. Do NOT penalize proper translation of headers or action verbs. "
+            f"Please write strengths, critical_weaknesses and actionable_improvements in {'Spanish' if language.lower() == 'es' else 'English'}).\n\n"
             f"GENERATED RESUME (Word Count: ~{word_count} words):\n"
             f"{resume_markdown}\n\n"
             "--- ATS RUBRIC (TOTAL 100 POINTS) ---\n"
@@ -51,9 +59,14 @@ class EvaluatorAgent:
             "- If total_score < 85, set decision='REWRITE' and meets_threshold=false, providing specific actionable_improvements.\n"
         )
 
-    async def evaluate(self, resume_markdown: str, job: JobRequirements) -> EvaluationResult:
+    async def evaluate(
+        self,
+        resume_markdown: str,
+        job: JobRequirements,
+        language: str = "en",
+    ) -> EvaluationResult:
         """Audita el currículum con Jev Router y retorna un EvaluationResult calibrado."""
-        prompt = self._build_evaluation_prompt(resume_markdown, job)
+        prompt = self._build_evaluation_prompt(resume_markdown, job, language=language)
 
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {

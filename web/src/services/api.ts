@@ -3,6 +3,7 @@ import type {
   FullProfileData,
   PersonalInfo,
   SkillCategory,
+  StreamProgressEvent,
   TrackedRepo,
   WorkExperience,
   WorkProject,
@@ -141,4 +142,67 @@ export const api = {
   // Health
   getHealth: (): Promise<{ status: string; database: string; counts: Record<string, number> }> =>
     fetch(`${API_BASE}/health`).then((res) => handleResponse(res)),
+
+  // Tailoring Studio Stream
+  streamTailor: async (
+    jobInput: string,
+    maxIterations: number = 2,
+    language: string = 'en',
+    onEvent: (event: StreamProgressEvent) => void,
+    signal?: AbortSignal
+  ): Promise<void> => {
+    const res = await fetch(`${API_BASE}/tailor/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_input: jobInput,
+        max_iterations: maxIterations,
+        language,
+      }),
+      signal,
+    });
+
+    if (!res.ok) {
+      let errorMsg = `Error ${res.status}: ${res.statusText}`;
+      try {
+        const errJson = await res.json();
+        if (errJson.detail) errorMsg = errJson.detail;
+      } catch (_) {}
+      throw new Error(errorMsg);
+    }
+
+    if (!res.body) {
+      throw new Error('La respuesta del servidor no tiene cuerpo de datos.');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() || '';
+
+      for (const block of lines) {
+        const trimmed = block.trim();
+        if (!trimmed) continue;
+        for (const line of trimmed.split('\n')) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6).trim();
+            try {
+              const parsed: StreamProgressEvent = JSON.parse(dataStr);
+              onEvent(parsed);
+            } catch (err) {
+              console.error('Error parsing SSE event:', err, dataStr);
+            }
+          }
+        }
+      }
+    }
+  },
 };
+

@@ -1,6 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 import re
+from typing import Any, Awaitable, Callable
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
@@ -11,6 +12,8 @@ from juanchito_assitant.agents.matcher import MatcherAgent
 from juanchito_assitant.config import OUTPUTS_DIR
 from juanchito_assitant.models.evaluation import EvaluationResult, IterationRecord
 from juanchito_assitant.models.job import JobRequirements
+
+ProgressCallback = Callable[[str, dict[str, Any]], Awaitable[None]]
 
 
 def _sanitize_filename(name: str) -> str:
@@ -25,6 +28,7 @@ class TailoringReport(BaseModel):
     final_evaluation: EvaluationResult
     iterations: list[IterationRecord] = Field(default_factory=list)
     output_file_path: Path
+    language: str = "en"
 
 
 class TailoringEngine:
@@ -48,12 +52,37 @@ class TailoringEngine:
         self,
         job_input: str,
         max_iterations: int = 2,
+        language: str = "en",
+        on_progress: ProgressCallback | None = None,
     ) -> TailoringReport:
-        """Ejecuta el flujo completo: análisis de vacante, matching, redacción y auditoría con Jev."""
+        """Ejecuta el flujo completo: análisis de vacante, matching, redacción y auditoría ATS."""
         # 1. Analizar vacante
+        if on_progress:
+            await on_progress(
+                "analyzing",
+                {
+                    "message": "Analizando requisitos y palabras clave de la vacante...",
+                    "step": 1,
+                    "total_steps": 4,
+                    "language": language,
+                },
+            )
         job = await self.job_analyzer.analyze_job(job_input)
 
         # 2. Selección de activos desde SQLite
+        if on_progress:
+            await on_progress(
+                "matching",
+                {
+                    "message": f"Seleccionando experiencias y proyectos relevantes para {job.job_title}...",
+                    "step": 2,
+                    "total_steps": 4,
+                    "job_title": job.job_title,
+                    "company": job.company_name or "Empresa",
+                    "keywords": job.ats_keywords[:8],
+                    "language": language,
+                },
+            )
         matched_ctx = self.matcher.match(job)
 
         iterations: list[IterationRecord] = []
@@ -61,10 +90,42 @@ class TailoringEngine:
         current_markdown = ""
         current_evaluation: EvaluationResult | None = None
 
-        # 3. Bucle reflexivo de redacción y auditoría con Jev
+        # 3. Bucle reflexivo de redacción y auditoría ATS
         for i in range(1, max_iterations + 1):
-            current_markdown = await self.writer.write_resume(matched_ctx, feedback=feedback)
-            current_evaluation = await self.evaluator.evaluate(current_markdown, job)
+            if on_progress:
+                iter_label = f" (Ronda {i}/{max_iterations})" if max_iterations > 1 else ""
+                await on_progress(
+                    "writing",
+                    {
+                        "message": f"Redactando y cuantificando logros con métricas{iter_label}...",
+                        "step": 3,
+                        "total_steps": 4,
+                        "iteration": i,
+                        "language": language,
+                    },
+                )
+            current_markdown = await self.writer.write_resume(
+                matched_ctx,
+                feedback=feedback,
+                language=language,
+            )
+
+            if on_progress:
+                await on_progress(
+                    "evaluating",
+                    {
+                        "message": f"Auditando compatibilidad ATS y calidad del currículum{iter_label}...",
+                        "step": 4,
+                        "total_steps": 4,
+                        "iteration": i,
+                        "language": language,
+                    },
+                )
+            current_evaluation = await self.evaluator.evaluate(
+                current_markdown,
+                job,
+                language=language,
+            )
 
             record = IterationRecord(
                 iteration=i,
@@ -93,10 +154,25 @@ class TailoringEngine:
         output_path = OUTPUTS_DIR / filename
         output_path.write_text(current_markdown, encoding="utf-8")
 
-        return TailoringReport(
+        report = TailoringReport(
             job=job,
             final_markdown=current_markdown,
             final_evaluation=current_evaluation,
             iterations=iterations,
             output_file_path=output_path,
+            language=language,
         )
+
+        if on_progress:
+            await on_progress(
+                "completed",
+                {
+                    "message": "¡Currículum adaptado y optimizado con éxito!",
+                    "step": 4,
+                    "total_steps": 4,
+                    "report": report.model_dump(mode="json"),
+                },
+            )
+
+        return report
+

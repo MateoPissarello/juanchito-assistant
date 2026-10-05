@@ -1,5 +1,6 @@
 import asyncio
 from pathlib import Path
+from typing import Annotated
 import httpx
 from rich.console import Console
 from rich.panel import Panel
@@ -158,6 +159,7 @@ def tailor(
     file: Path | None = typer.Option(None, "--file", "-f", help="Ruta a archivo .txt o .md con la vacante."),
     max_iterations: int = typer.Option(2, "--max-iterations", "-m", help="Límite del bucle reflexivo de auto-mejora."),
     output: Path | None = typer.Option(None, "--output", "-o", help="Ruta personalizada donde guardar el CV."),
+    language: str = typer.Option("en", "--language", "-l", help="Idioma del currículum ('en' para Inglés, 'es' para Español)."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Ejecutar análisis sin escribir en disco."),
     show_markdown: bool = typer.Option(False, "--show-markdown", help="Imprimir el contenido final en la consola."),
 ):
@@ -172,8 +174,9 @@ def tailor(
 
     init_db()
 
-    # 1. Determinar fuente de la vacante interactivamente si no se pasó argumento
+    # 1. Determinar fuente de la vacante e idioma interactivamente si no se pasó argumento
     job_input = ""
+    target_language = language.lower()
     if url:
         job_input = url.strip()
     elif file:
@@ -207,6 +210,13 @@ def tailor(
                 raise typer.Exit(code=1)
             job_input = fpath.read_text(encoding="utf-8")
 
+        # Preguntar idioma interactivamente
+        console.print("\n[bold yellow]🌐 ¿En qué idioma deseas generar el currículum?[/]")
+        console.print("  [cyan][1][/] English (en) [Predeterminado]")
+        console.print("  [cyan][2][/] Español (es)")
+        lang_choice = Prompt.ask("Selecciona un idioma", choices=["1", "2"], default="1")
+        target_language = "es" if lang_choice == "2" else "en"
+
     if not job_input:
         console.print("[bold red]Error:[/] La vacante no puede estar vacía.")
         raise typer.Exit(code=1)
@@ -231,6 +241,10 @@ def tailor(
     preview_table.add_row("Empresa:", company_name)
     preview_table.add_row("Cargo / Título:", job_reqs.job_title)
     preview_table.add_row("Seniority:", job_reqs.seniority_level)
+    preview_table.add_row(
+        "Idioma Destino:",
+        "[bold green]Español (es)[/]" if target_language == "es" else "[bold green]English (en)[/]",
+    )
     preview_table.add_row("Must-Have Skills:", must_have)
     preview_table.add_row("ATS Keywords:", ats_keys)
     preview_table.add_row("Resumen del Rol:", job_reqs.role_summary[:140] + "...")
@@ -267,7 +281,13 @@ def tailor(
         engine = TailoringEngine(session)
         with console.status("[bold green]Redactando viñetas (Google XYZ) y evaluando con TypeSafe Jev Router...[/]"):
             try:
-                report = asyncio.run(engine.run(job_input=job_input, max_iterations=max_iterations))
+                report = asyncio.run(
+                    engine.run(
+                        job_input=job_input,
+                        max_iterations=max_iterations,
+                        language=target_language,
+                    )
+                )
             except Exception as e:
                 console.print(f"[bold red]Error durante la ejecución del motor:[/] {e}")
                 raise typer.Exit(code=1)
@@ -463,12 +483,14 @@ def repo_list():
 
 @repo_app.command(name="add")
 def repo_add(
-    name: str = typer.Argument(..., help="Nombre del repositorio (ej. 'mi-nuevo-repo')"),
-    branch: str | None = typer.Option(None, "--branch", "-b", help="Rama específica a inspeccionar"),
-    category: str | None = typer.Option(None, "--category", "-c", help="Categoría técnica (ej. 'Backend')"),
-    priority: int = typer.Option(1, "--priority", "-p", help="Prioridad (1: Alta, 2: Normal)"),
+    name: Annotated[str, typer.Argument(help="Nombre del repositorio (ej. 'mi-nuevo-repo')")],
+    branch: Annotated[str | None, typer.Option("--branch", "-b", help="Rama específica a inspeccionar")] = None,
+    category: Annotated[str | None, typer.Option("--category", "-c", help="Categoría técnica (ej. 'Backend')")] = None,
+    priority: Annotated[int, typer.Option("--priority", "-p", help="Prioridad (1: Alta, 2: Normal)")] = 1,
+    sync: Annotated[bool | None, typer.Option("--sync/--no-sync", "-s", help="Sincronizar y analizar inmediatamente con IA")] = None,
 ):
     """Agrega un nuevo repositorio para seguimiento y sincronización."""
+    import sys
     init_db()
     with get_session() as session:
         existing = session.exec(select(TrackedRepo).where(TrackedRepo.name == name)).first()
@@ -488,6 +510,28 @@ def repo_add(
         session.refresh(new_repo)
 
     console.print(f"[bold green]✓ Repositorio '{name}' agregado con éxito a SQLite (ID: {new_repo.id}).[/]")
+
+    should_sync = sync
+    if should_sync is None:
+        if sys.stdin.isatty():
+            should_sync = Confirm.ask(
+                f"¿Deseas analizar y sincronizar [cyan]{name}[/] con IA ahora mismo?",
+                default=True,
+            )
+        else:
+            should_sync = False
+
+    if should_sync:
+        console.print(f"\n[bold cyan]🔄 Sincronizando '{name}' con GitHub y analizando con IA...[/]\n")
+        asyncio.run(
+            _run_sync(
+                username="MateoPissarello",
+                all_repos=False,
+                selected_repos=[name],
+                concurrency=1,
+                force=False,
+            )
+        )
 
 
 @repo_app.command(name="remove")
@@ -534,11 +578,11 @@ def repo_toggle(
 # ----------------------------------------------------------------------
 @sync_app.command(name="github")
 def sync_github_cmd(
-    user: str = typer.Option("MateoPissarello", "--user", "-u", help="Usuario de GitHub"),
-    all_repos: bool = typer.Option(False, "--all", "-a", help="Sincronizar todos los repositorios sin filtrar"),
-    repo: list[str] = typer.Option(None, "--repo", "-r", help="Repositorios específicos a sincronizar"),
-    concurrency: int = typer.Option(3, "--concurrency", "-c", help="Concurrencia de análisis simultáneo"),
-    force: bool = typer.Option(False, "--force", "-f", help="Forzar re-análisis con IA aunque no haya commits nuevos"),
+    user: Annotated[str, typer.Option("--user", "-u", help="Usuario de GitHub")] = "MateoPissarello",
+    all_repos: Annotated[bool, typer.Option("--all", "-a", help="Sincronizar todos los repositorios sin filtrar")] = False,
+    repo: Annotated[list[str] | None, typer.Option("--repo", "-r", help="Repositorios específicos a sincronizar")] = None,
+    concurrency: Annotated[int, typer.Option("--concurrency", "-c", help="Concurrencia de análisis simultáneo")] = 3,
+    force: Annotated[bool, typer.Option("--force", "-f", help="Forzar re-análisis con IA aunque no haya commits nuevos")] = False,
 ):
     """Sincroniza repositorios de GitHub hacia SQLite basándose en TrackedRepo."""
     asyncio.run(
@@ -554,11 +598,11 @@ def sync_github_cmd(
 
 @sync_app.command(name="linkedin")
 def sync_linkedin_cmd(
-    pdf_path: Path = typer.Argument(DATA_DIR / "linkedin_profile.pdf", help="Ruta al PDF oficial de LinkedIn"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Solo previsualizar sin alterar SQLite"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Confirmar automáticamente sin preguntar"),
-    include_non_technical: bool = typer.Option(False, "--include-non-technical", help="Incluir roles no técnicos"),
-    provider: str | None = typer.Option(None, "--provider", "-p", help="Proveedor de IA (openrouter/gemini)"),
+    pdf_path: Annotated[Path, typer.Argument(help="Ruta al PDF oficial de LinkedIn")] = DATA_DIR / "linkedin_profile.pdf",
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Solo previsualizar sin alterar SQLite")] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Confirmar automáticamente sin preguntar")] = False,
+    include_non_technical: Annotated[bool, typer.Option("--include-non-technical", help="Incluir roles no técnicos")] = False,
+    provider: Annotated[str | None, typer.Option("--provider", "-p", help="Proveedor de IA (openrouter/gemini)")] = None,
 ):
     """Importa y enriquece de forma no destructiva el perfil desde una exportación oficial de LinkedIn."""
     asyncio.run(
@@ -574,8 +618,8 @@ def sync_linkedin_cmd(
 
 @sync_app.command(name="all")
 def sync_all_cmd(
-    force: bool = typer.Option(False, "--force", "-f", help="Forzar reanálisis de repositorios en GitHub"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Confirmar importación de LinkedIn automáticamente"),
+    force: Annotated[bool, typer.Option("--force", "-f", help="Forzar reanálisis de repositorios en GitHub")] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Confirmar importación de LinkedIn automáticamente")] = False,
 ):
     """Ejecuta consecutivamente la sincronización de GitHub y la importación de LinkedIn."""
     console.print("[bold cyan]🔄 Sincronizando todo el perfil (GitHub + LinkedIn)...[/]\n")
@@ -600,13 +644,13 @@ def sync_callback(ctx: typer.Context):
         console.print("  [cyan][1][/] Solo GitHub (repositorios seguidos)")
         console.print("  [cyan][2][/] Solo LinkedIn (PDF export)")
         console.print("  [cyan][3][/] Ambos consecutivamente (GitHub + LinkedIn)")
-        choice = Prompt.ask("Selecciona una opción", choices=["1", "2", "3"], default="3")
+        choice = Prompt.ask("Selecciona una opción", choices=["1", "2", "3"], default="1")
         if choice == "1":
-            sync_github_cmd()
+            sync_github_cmd(user="MateoPissarello", all_repos=False, repo=None, concurrency=3, force=False)
         elif choice == "2":
-            sync_linkedin_cmd()
+            sync_linkedin_cmd(pdf_path=DATA_DIR / "linkedin_profile.pdf", dry_run=False, yes=False, include_non_technical=False, provider=None)
         elif choice == "3":
-            sync_all_cmd()
+            sync_all_cmd(force=False, yes=False)
 
 
 # ----------------------------------------------------------------------

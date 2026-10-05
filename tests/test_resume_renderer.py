@@ -79,3 +79,33 @@ def test_resume_renderer_html_structure():
     assert "### Amazon Web Services (AWS)" in rendered
     assert '#### AWS Solutions Architect <span class="spacer"></span><span class="normal">Apr. 2025</span>' in rendered
     assert "### Universidad Sergio Arboleda" in rendered
+
+
+def test_resume_renderer_spanish_headers():
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+    p = PersonalInfo(full_name="Mateo Pissarello")
+    session.add(p)
+    w = WorkExperience(company="Blend360", role="Backend Engineer", location="Bogotá", start_date="2024", end_date="Present")
+    session.add(w)
+    session.commit()
+
+    matcher = MatcherAgent(session)
+    job = JobRequirements(job_title="Backend Dev", must_have_skills=["Python"], role_summary="Dev")
+    ctx = matcher.match(job)
+
+    rendered = ResumeRenderer.render(
+        headline="Ingeniero de Software",
+        profile_summary="Especialista en sistemas distribuidos.",
+        experiences=[{"company": "Blend360", "role": "Ingeniero", "dates": "2024 - Present", "location": "Remote", "initiatives": []}],
+        skills={"Backend": ["Python"]},
+        matched_ctx=ctx,
+        language="es",
+    )
+    assert "## Perfil Profesional" in rendered
+    assert "## Experiencia Laboral" in rendered
+    assert "## Habilidades" in rendered
+    assert "Presente" in rendered
+    assert "Remoto" in rendered
+

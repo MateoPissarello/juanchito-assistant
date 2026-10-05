@@ -1,6 +1,8 @@
 import json
+import re
 
 import httpx
+from json_repair import loads as repair_loads
 from pydantic import BaseModel, Field
 
 from juanchito_assitant.config import (
@@ -39,6 +41,50 @@ class RepoAnalysisResult(BaseModel):
         default=None,
         description="Complete professional README.md in English (with title, overview, architecture/features, prerequisites, setup and usage) ONLY if has_adequate_readme is False.",
     )
+
+
+def _clean_and_parse_llm_json(content: str) -> RepoAnalysisResult:
+    """Extrae, repara y valida un JSON devuelto por un LLM hacia RepoAnalysisResult."""
+    cleaned = content.strip()
+
+    # 1. Extraer bloques de código markdown si los hay
+    if cleaned.startswith("```"):
+        parts = cleaned.split("```")
+        for p in parts[1:]:
+            p_clean = p.lstrip()
+            if p_clean.startswith("json"):
+                p_clean = p_clean[4:].lstrip()
+            if "{" in p_clean and "}" in p_clean:
+                cleaned = p_clean
+                break
+
+    # 2. Intento estándar directo
+    try:
+        return RepoAnalysisResult.model_validate_json(cleaned)
+    except Exception:
+        pass
+
+    # 3. Reparación heurística de claves unificadas tipo: "summary: Some text here...",
+    pattern = re.compile(r'^(\s*)\"([a-zA-Z_][a-zA-Z0-9_]*):\s*(.*?)\"(,?)\s*$', re.MULTILINE)
+    pre_repaired = pattern.sub(r'\1"\2": "\3"\4', cleaned)
+
+    # 4. Reparación profunda con json_repair (comillas sin escapar, trailing commas, control chars)
+    try:
+        obj = repair_loads(pre_repaired)
+        if isinstance(obj, dict):
+            # Normalizar claves si alguna contiene prefijo residual
+            for k in list(obj.keys()):
+                if ":" in k and " " in k:
+                    prefix = k.split(":", 1)[0].strip()
+                    val = k.split(":", 1)[1].strip()
+                    obj[prefix] = val
+                    del obj[k]
+            return RepoAnalysisResult.model_validate(obj)
+    except Exception:
+        pass
+
+    # 5. Fallback final estándar
+    return RepoAnalysisResult.model_validate_json(pre_repaired)
 
 
 class RepoAnalyzer:
@@ -150,7 +196,7 @@ YOUR TASKS:
             "You are an elite Staff Software Engineer and Technical Recruiter. "
             "Analyze the provided repository and return your analysis strictly as a JSON object matching this schema:\n"
             f"{schema_json}\n"
-            "Return ONLY the valid raw JSON object without markdown code blocks."
+            'CRITICAL: Every key MUST be enclosed in double quotes followed by a colon and the value, e.g. "summary": "...". NEVER merge key and value like "summary: ...". Return ONLY the valid raw JSON object.'
         )
 
         payload = {
@@ -168,10 +214,7 @@ YOUR TASKS:
             response.raise_for_status()
             data = response.json()
             content = data["choices"][0]["message"]["content"].strip()
-            # Eliminar posibles bloques de markdown ```json ... ```
-            if content.startswith("```"):
-                content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-            return RepoAnalysisResult.model_validate_json(content)
+            return _clean_and_parse_llm_json(content)
 
     async def _analyze_gemini(self, prompt: str) -> RepoAnalysisResult:
         """Envía la solicitud asíncrona a Google Gemini usando google-genai."""
@@ -190,7 +233,7 @@ YOUR TASKS:
             config=config,
         )
 
-        return RepoAnalysisResult.model_validate_json(response.text)
+        return _clean_and_parse_llm_json(response.text)
 
     async def analyze(self, ctx: RepoContext) -> RepoAnalysisResult:
         """Punto de entrada asíncrono para analizar el repositorio con el proveedor activo."""

@@ -87,3 +87,53 @@ export interface FullProfileData {
   education: Education[];
   additional_achievements: any[];
 }
+
+export interface ScoreBreakdown {
+  ats_keyword_match: number;
+  role_relevance: number;
+  quantifiable_impact: number;
+  factual_integrity: number;
+  format_and_length: number;
+}
+
+export interface EvaluationResult {
+  total_score: number;
+  decision: string;
+  meets_threshold: boolean;
+  breakdown: ScoreBreakdown;
+  strengths: string[];
+  critical_weaknesses: string[];
+  actionable_improvements: string[];
+}
+
+export interface JobRequirements {
+  job_title: string;
+  company_name: string | null;
+  seniority_level: string | null;
+  must_have_skills: string[];
+  nice_to_have_skills: string[];
+  core_responsibilities: string[];
+  ats_keywords: string[];
+  role_summary: string;
+}
+
+export interface TailoringReport {
+  job: JobRequirements;
+  final_markdown: string;
+  final_evaluation: EvaluationResult;
+  iterations: any[];
+  output_file_path: string;
+}
+
+export interface StreamProgressEvent {
+  type: 'analyzing' | 'matching' | 'writing' | 'evaluating' | 'completed' | 'error';
+  message: string;
+  step?: number;
+  total_steps?: number;
+  iteration?: number;
+  job_title?: string;
+  company?: string;
+  keywords?: string[];
+  report?: TailoringReport;
+}
+

@@ -130,23 +130,43 @@ class WriterAgent:
             f"Available Work Initiatives:\n{work_str}\n"
         )
 
-    async def write_resume(self, ctx: MatchedContext, feedback: list[str] | None = None) -> str:
+    async def write_resume(
+        self,
+        ctx: MatchedContext,
+        feedback: list[str] | None = None,
+        language: str = "en",
+    ) -> str:
         """Genera el contenido estructurado adaptado con LLM y lo renderiza con ResumeRenderer."""
         user_prompt = self._build_context_prompt(ctx, feedback)
         schema_json = json.dumps(TailoredResumeContent.model_json_schema())
+
+        if language.lower() == "es":
+            lang_instruction = (
+                "LANGUAGE DIRECTIVE (CRITICAL - SPANISH OUTPUT):\n"
+                "You MUST generate all output fields in professional Spanish (español profesional técnico para ingeniería de software):\n"
+                "- `headline` in Spanish (e.g., 'Ingeniero Backend Senior | Arquitectura Cloud & Microservicios').\n"
+                "- `profile_summary` in 1 powerful paragraph in Spanish (~60-80 words) highlighting backend, cloud, and distributed systems.\n"
+                "- For each experience, reformulate 2 to 4 bullets following the Google XYZ formula in Spanish: Logré [X] medido por [Y] mediante [Z], using strong action verbs in past tense (e.g., 'Diseñé e implementé...', 'Optimicé...', 'Reduciendo la latencia en un **40%** mediante **FastAPI**').\n"
+                "- Keep standard industry technical keywords in English (e.g., Python, FastAPI, AWS, Docker, Kubernetes, CI/CD, Microservices, Redis, PostgreSQL), but all verbs, impact statements, and sentences MUST be in fluent Spanish.\n"
+            )
+        else:
+            lang_instruction = (
+                "LANGUAGE DIRECTIVE:\n"
+                "Write all text in executive English (~60-80 words summary, Google XYZ formula in English for bullets).\n"
+            )
 
         system_prompt = (
             "You are an elite Executive Tech Resume Writer and ATS Optimization Specialist. "
             "Tailor the candidate's headline, profile summary, skills, and work initiatives for the target job. "
             "You must return strictly a valid JSON object matching this schema:\n"
             f"{schema_json}\n\n"
+            f"{lang_instruction}\n"
             "RULES:\n"
             "1. Output ONLY the raw JSON object. Do not include markdown code markers or preamble.\n"
             "2. Tailor `headline` to match the job title and core expertise.\n"
-            "3. Tailor `profile_summary` to 1 powerful paragraph in English (~60-80 words) emphasizing cloud, distributed systems, and backend mastery.\n"
-            "4. For each experience, reformulate 2 to 4 bullets following the Google XYZ formula: Accomplished [X] measured by [Y] by doing [Z], bolding key technologies and quantifiable metrics (**FastAPI**, **50%**).\n"
-            "5. In `prioritized_skills`, order categories and skills so that the job's must-have skills appear first.\n"
-            "6. 100% FACTUAL: Do not hallucinate technologies or jobs not present in the master profile."
+            "3. For each experience, reformulate 2 to 4 bullets following the Google XYZ formula, bolding key technologies and quantifiable metrics (**FastAPI**, **50%**).\n"
+            "4. In `prioritized_skills`, order categories and skills so that the job's must-have skills appear first.\n"
+            "5. 100% FACTUAL: Do not hallucinate technologies or jobs not present in the master profile."
         )
 
         content: TailoredResumeContent
@@ -164,6 +184,7 @@ class WriterAgent:
             experiences=[exp.model_dump() for exp in content.experiences],
             skills=content.prioritized_skills,
             matched_ctx=ctx,
+            language=language,
         )
         return rendered_md
 
