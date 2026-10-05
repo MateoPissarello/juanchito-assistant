@@ -10,12 +10,14 @@ import { ReposCanvas } from './components/views/ReposCanvas';
 import { SkillsCanvas } from './components/views/SkillsCanvas';
 import { CertsCanvas } from './components/views/CertsCanvas';
 import { TailoringStudioCanvas } from './components/views/TailoringStudioCanvas';
+import { HistoryCanvas } from './components/views/HistoryCanvas';
 import type { FullProfileData, WorkExperience } from './types/profile';
 import { api } from './services/api';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
 export const WorkbenchApp: React.FC = () => {
   const [profile, setProfile] = useState<FullProfileData | null>(null);
+  const [historyCount, setHistoryCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dbHealthy, setDbHealthy] = useState(true);
@@ -28,8 +30,12 @@ export const WorkbenchApp: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.getProfile();
+      const [data, historyItems] = await Promise.all([
+        api.getProfile(),
+        api.getResumeHistory().catch(() => []),
+      ]);
       setProfile(data);
+      setHistoryCount(historyItems.length);
       setDbHealthy(true);
 
       // Si estábamos en una experiencia que ya no existe o es la primera carga y no hay exp seleccionada
@@ -60,6 +66,7 @@ export const WorkbenchApp: React.FC = () => {
     if (nav.view === 'repos') return ['profile.db', 'tracked_repositories'];
     if (nav.view === 'skills') return ['profile.db', 'skill_matrix'];
     if (nav.view === 'certs') return ['profile.db', 'certifications'];
+    if (nav.view === 'history') return ['archive', 'generated_resumes'];
     if (nav.view === 'tailor') return ['studio', 'tailor', 'ats_optimizer'];
     if (nav.view === 'experience') {
       if (isCreatingCompany) return ['profile.db', 'experiences', 'new_company'];
@@ -123,6 +130,7 @@ export const WorkbenchApp: React.FC = () => {
           activeRepoCount={profile?.tracked_repos.filter((r) => r.is_active).length || 0}
           skillCategoryCount={profile?.skills.length || 0}
           certCount={profile?.certifications.length || 0}
+          historyCount={historyCount}
           onNewCompany={handleStartNewCompany}
         />
 
@@ -230,6 +238,10 @@ export const WorkbenchApp: React.FC = () => {
               )}
 
               {nav.view === 'tailor' && <TailoringStudioCanvas />}
+
+              {nav.view === 'history' && (
+                <HistoryCanvas onNavigateToStudio={() => setNav({ view: 'tailor' })} />
+              )}
             </div>
           )}
         </main>

@@ -1,11 +1,18 @@
 import asyncio
+from datetime import datetime
 import json
+from pathlib import Path
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 
+from juanchito_assitant.agents.evaluator import EvaluatorAgent
+from juanchito_assitant.config import OUTPUTS_DIR
 from juanchito_assitant.db.database import get_session
+from juanchito_assitant.models.evaluation import EvaluationResult
+from juanchito_assitant.models.job import JobRequirements
 from juanchito_assitant.models.profile import (
     AdditionalAchievement,
     Certification,
@@ -22,6 +29,8 @@ from juanchito_assitant.web.schemas import (
     CertificationCreate,
     CertificationUpdate,
     PersonalInfoUpdate,
+    ResumeHistoryDetail,
+    ResumeHistoryItem,
     SkillCategoryCreate,
     SkillCategoryUpdate,
     TailorStreamRequest,
@@ -441,3 +450,188 @@ async def tailor_resume_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# --- Historial de Currículums Adaptados ---
+
+_ROLE_KEYWORDS = {
+    "software", "backend", "frontend", "fullstack", "full", "ai", "data", "senior",
+    "sr", "junior", "jr", "lead", "engineer", "developer", "architect", "scientist",
+    "devops", "cloud", "machine", "intern", "associate", "tech", "systems", "qa",
+}
+
+
+def _parse_resume_metadata(file_path: Path) -> ResumeHistoryItem | None:
+    filename = file_path.name
+    if not filename.endswith(".md") or file_path.stat().st_size < 100:
+        return None
+
+    match = re.search(r"^resume_(.+)_(\d{8}_\d{6})\.md$", filename)
+    if match:
+        body = match.group(1)
+        raw_ts = match.group(2)
+        try:
+            dt = datetime.strptime(raw_ts, "%Y%m%d_%H%M%S")
+            created_at = dt.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            created_at = raw_ts
+    else:
+        body = filename.removeprefix("resume_").removesuffix(".md")
+        raw_ts = ""
+        dt = datetime.fromtimestamp(file_path.stat().st_mtime)
+        created_at = dt.strftime("%Y-%m-%d %H:%M")
+
+    tokens = [t for t in re.split(r"[_]+", body) if t]
+    split_idx = 1
+    for idx, tok in enumerate(tokens):
+        if idx > 0 and tok.lower() in _ROLE_KEYWORDS:
+            split_idx = idx
+            break
+
+    company = " ".join(tokens[:split_idx]).replace("-", "").strip() or "Company"
+    role = " ".join(tokens[split_idx:]).replace("-", " ").strip()
+    role = re.sub(r"\s+", " ", role) or "Software Engineer"
+
+    content = file_path.read_text(encoding="utf-8")
+    headline_match = re.search(r'<div class="headline">\s*(.*?)\s*</div>', content, re.DOTALL)
+    headline = headline_match.group(1).strip() if headline_match else None
+    language = "es" if "## Perfil" in content or "## Experiencia" in content or "## Habilidades" in content else "en"
+    word_count = len(content.split())
+
+    # Extraer puntaje ATS del archivo JSON acompañante si existe
+    ats_score: int | None = None
+    ats_decision: str | None = None
+    json_path = file_path.with_suffix(".json")
+    if json_path.is_file():
+        try:
+            report_data = json.loads(json_path.read_text(encoding="utf-8"))
+            final_eval = report_data.get("final_evaluation")
+            if final_eval:
+                ats_score = final_eval.get("total_score")
+                ats_decision = final_eval.get("decision")
+        except Exception:
+            pass
+
+    return ResumeHistoryItem(
+        filename=filename,
+        company=company,
+        role=role,
+        created_at=created_at,
+        timestamp_raw=raw_ts,
+        language=language,
+        headline=headline,
+        size_bytes=file_path.stat().st_size,
+        word_count=word_count,
+        ats_score=ats_score,
+        ats_decision=ats_decision,
+    )
+
+
+@router.get("/tailor/history", response_model=list[ResumeHistoryItem])
+def get_resume_history():
+    """Retorna la lista de currículums adaptados generados previamente en data/outputs/."""
+    if not OUTPUTS_DIR.exists():
+        return []
+
+    items: list[ResumeHistoryItem] = []
+    for file_path in OUTPUTS_DIR.glob("*.md"):
+        item = _parse_resume_metadata(file_path)
+        if item:
+            items.append(item)
+
+    items.sort(key=lambda x: x.timestamp_raw or x.created_at, reverse=True)
+    return items
+
+
+@router.get("/tailor/history/{filename}", response_model=ResumeHistoryDetail)
+def get_resume_history_detail(filename: str):
+    """Retorna el contenido completo en Markdown y metadatos de un currículum generado previamente."""
+    if ".." in filename or "/" in filename or "\\" in filename or not filename.endswith(".md"):
+        raise HTTPException(status_code=400, detail="Nombre de archivo inválido")
+
+    target_file = OUTPUTS_DIR / filename
+    if not target_file.is_file():
+        raise HTTPException(status_code=404, detail="Currículum no encontrado")
+
+    item = _parse_resume_metadata(target_file)
+    if not item:
+        raise HTTPException(status_code=400, detail="El archivo solicitado no es un currículum válido")
+
+    content = target_file.read_text(encoding="utf-8")
+
+    evaluation: EvaluationResult | None = None
+    json_path = target_file.with_suffix(".json")
+    if json_path.is_file():
+        try:
+            report_data = json.loads(json_path.read_text(encoding="utf-8"))
+            if "final_evaluation" in report_data and report_data["final_evaluation"]:
+                evaluation = EvaluationResult.model_validate(report_data["final_evaluation"])
+        except Exception:
+            pass
+
+    return ResumeHistoryDetail(
+        **item.model_dump(),
+        markdown=content,
+        evaluation=evaluation,
+    )
+
+
+@router.post("/tailor/history/{filename}/audit", response_model=ResumeHistoryDetail)
+async def audit_resume_history(filename: str):
+    """Ejecuta una auditoría ATS con EvaluatorAgent sobre un currículum existente y guarda su .json."""
+    if ".." in filename or "/" in filename or "\\" in filename or not filename.endswith(".md"):
+        raise HTTPException(status_code=400, detail="Nombre de archivo inválido")
+
+    target_file = OUTPUTS_DIR / filename
+    if not target_file.is_file():
+        raise HTTPException(status_code=404, detail="Currículum no encontrado")
+
+    item = _parse_resume_metadata(target_file)
+    if not item:
+        raise HTTPException(status_code=400, detail="El archivo solicitado no es un currículum válido")
+
+    content = target_file.read_text(encoding="utf-8")
+    json_path = target_file.with_suffix(".json")
+
+    job = None
+    if json_path.is_file():
+        try:
+            report_data = json.loads(json_path.read_text(encoding="utf-8"))
+            if "job" in report_data and report_data["job"]:
+                job = JobRequirements.model_validate(report_data["job"])
+        except Exception:
+            pass
+
+    if not job:
+        job = JobRequirements(
+            job_title=item.role,
+            company_name=item.company,
+            role_summary=item.headline or f"{item.role} at {item.company}",
+            must_have_skills=[],
+            nice_to_have_skills=[],
+            ats_keywords=[],
+            core_responsibilities=[],
+        )
+
+    evaluator = EvaluatorAgent()
+    evaluation = await evaluator.evaluate(job=job, resume_markdown=content, language=item.language)
+
+    report_payload = {
+        "job": job.model_dump(mode="json"),
+        "final_markdown": content,
+        "final_evaluation": evaluation.model_dump(mode="json"),
+        "language": item.language,
+    }
+    json_path.write_text(json.dumps(report_payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    item_dict = item.model_dump()
+    item_dict["ats_score"] = evaluation.total_score
+    item_dict["ats_decision"] = evaluation.decision
+
+    return ResumeHistoryDetail(
+        **item_dict,
+        markdown=content,
+        evaluation=evaluation,
+    )
+
+

@@ -8,6 +8,7 @@ import {
   Copy,
   Check,
   Download,
+  Printer,
   Columns,
   Eye,
   Edit3,
@@ -25,7 +26,7 @@ export const TailoringStudioCanvas: React.FC = () => {
   const [inputMode, setInputMode] = useState<'url' | 'text'>('url');
   const [jobUrl, setJobUrl] = useState('');
   const [jobText, setJobText] = useState('');
-  const [maxIterations] = useState(2);
+  const [maxIterations, setMaxIterations] = useState<number>(3);
   const [language, setLanguage] = useState<'en' | 'es'>('en');
 
   // Execution & Progress State
@@ -139,6 +140,24 @@ export const TailoringStudioCanvas: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const handlePrintPdf = () => {
+    if (!markdown) return;
+    const company = report?.job.company_name?.replace(/[^\w-]/g, '_') || 'company';
+    const title = report?.job.job_title?.replace(/[^\w-]/g, '_') || 'role';
+    const originalTitle = document.title;
+
+    // Asignar el nombre del documento para que el diálogo del navegador prellene el nombre del archivo PDF
+    document.title = `resume_${company}_${title}_${language}`;
+
+    // Disparar la impresión nativa de alta fidelidad
+    window.print();
+
+    // Restaurar el título original después del evento
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
+  };
+
   // Conteo de palabras para presupuesto de 1 página
   const wordCount = markdown
     .trim()
@@ -148,7 +167,7 @@ export const TailoringStudioCanvas: React.FC = () => {
   return (
     <div className="h-full flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
       {/* Top Header & Input Bar */}
-      <div className="p-4 sm:p-5 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0">
+      <div className="p-4 sm:p-5 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0 print:hidden">
         <div className="max-w-7xl mx-auto space-y-4">
           {/* Header Title */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -162,8 +181,31 @@ export const TailoringStudioCanvas: React.FC = () => {
               </p>
             </div>
 
-            {/* Controls: Language Selector + Input Mode */}
-            <div className="flex items-center space-x-2 self-start sm:self-auto">
+            {/* Controls: Iterations Selector + Language Selector + Input Mode */}
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+              {/* Iterations Selector */}
+              <div className="flex items-center space-x-1 p-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700/80">
+                <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 px-1.5 uppercase select-none">
+                  Rondas
+                </span>
+                {[1, 2, 3, 4, 5].map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    onClick={() => setMaxIterations(count)}
+                    disabled={isRunning}
+                    title={`Límite de hasta ${count} ${count === 1 ? 'ronda' : 'rondas'} de redacción y evaluación ATS`}
+                    className={`px-2 py-1 rounded text-xs font-mono font-medium transition-colors cursor-pointer ${
+                      maxIterations === count
+                        ? 'bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
+                        : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    {count}x
+                  </button>
+                ))}
+              </div>
+
               {/* Language Selector */}
               <div className="flex items-center space-x-1 p-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700/80">
                 <span className="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 px-1.5 uppercase select-none">
@@ -342,7 +384,7 @@ export const TailoringStudioCanvas: React.FC = () => {
       {/* Main Workspace: Split-View */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Workspace Toolbar */}
-        <div className="px-4 py-2 bg-zinc-100 dark:bg-zinc-900/60 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
+        <div className="px-4 py-2 bg-zinc-100 dark:bg-zinc-900/60 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0 print:hidden">
           <div className="flex items-center space-x-2 text-xs">
             {/* View Mode Switches */}
             <div className="flex items-center space-x-1 p-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
@@ -398,6 +440,7 @@ export const TailoringStudioCanvas: React.FC = () => {
               type="button"
               onClick={handleCopyMarkdown}
               disabled={!markdown}
+              title="Copiar contenido Markdown al portapapeles"
               className="inline-flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-medium border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
@@ -408,47 +451,55 @@ export const TailoringStudioCanvas: React.FC = () => {
               type="button"
               onClick={handleDownloadMarkdown}
               disabled={!markdown}
+              title="Descargar archivo .md"
               className="inline-flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-medium border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Descargar .md</span>
             </button>
+
+            <button
+              type="button"
+              onClick={handlePrintPdf}
+              disabled={!markdown}
+              title="Exportar currículum en PDF vectorial de 1 página"
+              className="inline-flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-medium border border-emerald-600 dark:border-emerald-500 bg-emerald-600 dark:bg-emerald-500 text-white hover:bg-emerald-700 dark:hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-xs"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Descargar PDF</span>
+            </button>
           </div>
         </div>
 
         {/* Content View Body */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden print:overflow-visible print:block">
           {/* Left Panel: Markdown Editor */}
-          {(viewMode === 'split' || viewMode === 'editor') && (
-            <div
-              className={`flex-1 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-900 text-zinc-100 ${
-                viewMode === 'editor' ? 'w-full' : 'w-1/2'
-              }`}
-            >
-              <div className="px-3 py-1.5 bg-zinc-950 text-zinc-400 font-mono text-[11px] border-b border-zinc-800 flex justify-between items-center">
-                <span>markdown_source.md</span>
-                <span>resume.lol syntax</span>
-              </div>
-              <textarea
-                value={markdown}
-                onChange={(e) => setMarkdown(e.target.value)}
-                placeholder="El código Markdown generado se desplegará aquí y podrás editarlo directamente..."
-                className="flex-1 w-full p-4 font-mono text-xs leading-relaxed bg-transparent text-zinc-200 resize-none focus:outline-hidden selection:bg-zinc-700"
-                spellCheck={false}
-              />
+          <div
+            className={`flex-1 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-900 text-zinc-100 ${
+              viewMode === 'editor' ? 'w-full' : viewMode === 'split' ? 'w-1/2' : 'hidden'
+            } print:hidden`}
+          >
+            <div className="px-3 py-1.5 bg-zinc-950 text-zinc-400 font-mono text-[11px] border-b border-zinc-800 flex justify-between items-center">
+              <span>markdown_source.md</span>
+              <span>resume.lol syntax</span>
             </div>
-          )}
+            <textarea
+              value={markdown}
+              onChange={(e) => setMarkdown(e.target.value)}
+              placeholder="El código Markdown generado se desplegará aquí y podrás editarlo directamente..."
+              className="flex-1 w-full p-4 font-mono text-xs leading-relaxed bg-transparent text-zinc-200 resize-none focus:outline-hidden selection:bg-zinc-700"
+              spellCheck={false}
+            />
+          </div>
 
           {/* Right Panel: Live Resume Preview */}
-          {(viewMode === 'split' || viewMode === 'preview') && (
-            <div
-              className={`flex-1 overflow-y-auto bg-zinc-200/80 dark:bg-zinc-950 ${
-                viewMode === 'preview' ? 'w-full' : 'w-1/2'
-              }`}
-            >
-              <LiveResumePreview markdown={markdown} />
-            </div>
-          )}
+          <div
+            className={`flex-1 overflow-y-auto bg-zinc-200/80 dark:bg-zinc-950 ${
+              viewMode === 'preview' ? 'w-full' : viewMode === 'split' ? 'w-1/2' : 'hidden print:block'
+            } print:w-full print:bg-white print:overflow-visible print:p-0 print:m-0`}
+          >
+            <LiveResumePreview markdown={markdown} />
+          </div>
         </div>
       </div>
     </div>

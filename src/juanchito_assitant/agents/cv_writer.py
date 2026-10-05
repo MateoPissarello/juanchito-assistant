@@ -37,10 +37,22 @@ class TailoredExperience(BaseModel):
     initiatives: list[TailoredInitiative] = Field(default_factory=list)
 
 
+class TailoredProject(BaseModel):
+    name: str = Field(description="Nombre del proyecto técnico / repositorio.")
+    repo_url: str | None = Field(default=None, description="URL del repositorio en GitHub.")
+    technologies: list[str] = Field(default_factory=list, description="Lista de 3 a 6 tecnologías clave utilizadas.")
+    year: str = Field(default="2024", description="Año de desarrollo o última actualización.")
+    bullets: list[str] = Field(description="1 a 3 viñetas Google XYZ con métricas y tecnologías en negrita (**tech**, **metric**).")
+
+
 class TailoredResumeContent(BaseModel):
     headline: str = Field(description="Titular profesional adaptado a la vacante.")
-    profile_summary: str = Field(description="1 párrafo conciso en inglés enfocado en el match con el rol.")
+    profile_summary: str = Field(description="1 párrafo conciso enfocado en el match con el rol.")
     experiences: list[TailoredExperience] = Field(default_factory=list)
+    projects: list[TailoredProject] = Field(
+        default_factory=list,
+        description="Proyectos técnicos de software personales (GitHub) seleccionados y adaptados para la vacante.",
+    )
     prioritized_skills: dict[str, list[str]] = Field(
         default_factory=dict,
         description="Categorías de skills y sus listas de habilidades ordenadas por relevancia para el rol.",
@@ -106,6 +118,22 @@ class WriterAgent:
 
         skills_dict: dict[str, list[str]] = {cat.category: cat.skills for cat in ctx.skills[:5]}
 
+        projects_str = ""
+        if ctx.github_matches:
+            projects_str += "Available Technical Projects (GitHub):\n"
+            for p in ctx.github_matches:
+                projects_str += f"- Project Name: {p.name}\n"
+                if p.repo_url:
+                    projects_str += f"  Repo URL: {p.repo_url}\n"
+                projects_str += f"  Year: {p.year}\n"
+                projects_str += f"  Techs: {', '.join(p.technologies)}\n"
+                if p.description:
+                    projects_str += f"  Description: {p.description}\n"
+                if p.bullets:
+                    projects_str += "  Key achievements / bullets:\n"
+                    for b in p.bullets:
+                        projects_str += f"    * {b}\n"
+
         feedback_section = ""
         if feedback:
             feedback_section = (
@@ -128,6 +156,7 @@ class WriterAgent:
             f"Personal: {ctx.personal_info.full_name} | {ctx.personal_info.location}\n"
             f"Available Skills:\n{json.dumps(skills_dict, indent=2)}\n"
             f"Available Work Initiatives:\n{work_str}\n"
+            f"{projects_str}\n"
         )
 
     async def write_resume(
@@ -147,17 +176,18 @@ class WriterAgent:
                 "- `headline` in Spanish (e.g., 'Ingeniero Backend Senior | Arquitectura Cloud & Microservicios').\n"
                 "- `profile_summary` in 1 powerful paragraph in Spanish (~60-80 words) highlighting backend, cloud, and distributed systems.\n"
                 "- For each experience, reformulate 2 to 4 bullets following the Google XYZ formula in Spanish: Logré [X] medido por [Y] mediante [Z], using strong action verbs in past tense (e.g., 'Diseñé e implementé...', 'Optimicé...', 'Reduciendo la latencia en un **40%** mediante **FastAPI**').\n"
+                "- For each project in `projects` (if available in the context), retain the project name, repo_url, technologies, and year, and write 1 to 3 Google XYZ bullets in Spanish highlighting technical architecture and impact.\n"
                 "- Keep standard industry technical keywords in English (e.g., Python, FastAPI, AWS, Docker, Kubernetes, CI/CD, Microservices, Redis, PostgreSQL), but all verbs, impact statements, and sentences MUST be in fluent Spanish.\n"
             )
         else:
             lang_instruction = (
                 "LANGUAGE DIRECTIVE:\n"
-                "Write all text in executive English (~60-80 words summary, Google XYZ formula in English for bullets).\n"
+                "Write all text in executive English (~60-80 words summary, Google XYZ formula in English for bullets in both experiences and projects).\n"
             )
 
         system_prompt = (
             "You are an elite Executive Tech Resume Writer and ATS Optimization Specialist. "
-            "Tailor the candidate's headline, profile summary, skills, and work initiatives for the target job. "
+            "Tailor the candidate's headline, profile summary, skills, work initiatives, and technical projects for the target job. "
             "You must return strictly a valid JSON object matching this schema:\n"
             f"{schema_json}\n\n"
             f"{lang_instruction}\n"
@@ -165,8 +195,9 @@ class WriterAgent:
             "1. Output ONLY the raw JSON object. Do not include markdown code markers or preamble.\n"
             "2. Tailor `headline` to match the job title and core expertise.\n"
             "3. For each experience, reformulate 2 to 4 bullets following the Google XYZ formula, bolding key technologies and quantifiable metrics (**FastAPI**, **50%**).\n"
-            "4. In `prioritized_skills`, order categories and skills so that the job's must-have skills appear first.\n"
-            "5. 100% FACTUAL: Do not hallucinate technologies or jobs not present in the master profile."
+            "4. For each project in `projects`, formulate 1 to 3 impactful bullets following Google XYZ formula, highlighting architecture, APIs, or data pipelines.\n"
+            "5. In `prioritized_skills`, order categories and skills so that the job's must-have skills appear first.\n"
+            "6. 100% FACTUAL: Do not hallucinate technologies, jobs, or projects not present in the master profile."
         )
 
         content: TailoredResumeContent
@@ -185,6 +216,7 @@ class WriterAgent:
             skills=content.prioritized_skills,
             matched_ctx=ctx,
             language=language,
+            projects=[p.model_dump() for p in content.projects] if content.projects else None,
         )
         return rendered_md
 

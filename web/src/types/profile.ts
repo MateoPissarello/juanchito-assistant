@@ -137,3 +137,23 @@ export interface StreamProgressEvent {
   report?: TailoringReport;
 }
 
+export interface ResumeHistoryItem {
+  filename: string;
+  company: string;
+  role: string;
+  created_at: string;
+  timestamp_raw: string;
+  language: 'en' | 'es';
+  headline?: string;
+  size_bytes: number;
+  word_count: number;
+  ats_score?: number | null;
+  ats_decision?: string | null;
+}
+
+export interface ResumeHistoryDetail extends ResumeHistoryItem {
+  markdown: string;
+  evaluation?: EvaluationResult | null;
+}
+
+

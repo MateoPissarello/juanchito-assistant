@@ -1,3 +1,4 @@
+import json
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
@@ -237,5 +238,156 @@ def test_tailor_stream_success(client, tmp_path):
         assert "data: " in body
         assert "es" in body
         assert "completed" in body
+
+
+def test_tailor_stream_max_iterations_validation(client):
+    # max_iterations=5 is allowed
+    res_ok = client.post(
+        "/api/tailor/stream",
+        json={"job_input": "   ", "max_iterations": 5},
+    )
+    assert res_ok.status_code == 400  # Empty input validation
+
+    # max_iterations=6 exceeds the upper limit le=5
+    res_invalid = client.post(
+        "/api/tailor/stream",
+        json={"job_input": "Backend Engineer", "max_iterations": 6},
+    )
+    assert res_invalid.status_code == 422
+
+
+def test_get_resume_history_and_detail(client, tmp_path, monkeypatch):
+    mock_outputs = tmp_path / "outputs"
+    mock_outputs.mkdir()
+
+    # Stub file (< 100 bytes) should be ignored
+    stub_file = mock_outputs / "resume_Acme_Dev_20261001_000000.md"
+    stub_file.write_text("# Stub", encoding="utf-8")
+
+    # Valid file in Spanish
+    es_content = """# Mateo Pissarello
+<div class="headline">
+Senior Cloud Architect | AWS & Kubernetes
+</div>
+<div class="section headerInfo">
+- Bogotá, Colombia
+</div>
+
+## Perfil Profesional
+Ingeniero de software con más de 4 años de experiencia diseñando arquitecturas en la nube.
+
+## Experiencia Laboral
+### Senior Engineer
+"""
+    es_file = mock_outputs / "resume_Nubank_Senior_Backend_Engineer_20261004_181458.md"
+    es_file.write_text(es_content, encoding="utf-8")
+
+    # Valid file in English with companion JSON
+    en_content = """# Mateo Pissarello
+<div class="headline">
+AI Engineer & Full-Stack Developer
+</div>
+
+## Profile
+Experienced AI engineer building LLM applications and microservices with FastAPI and Docker.
+
+## Experience
+### AI Developer
+"""
+    en_file = mock_outputs / "resume_Atoms_AI_Engineer_20261005_101908.md"
+    en_file.write_text(en_content, encoding="utf-8")
+
+    # Add companion JSON for Atoms with ATS score = 92
+    en_json = mock_outputs / "resume_Atoms_AI_Engineer_20261005_101908.json"
+    en_json_data = {
+        "final_evaluation": {
+            "total_score": 92,
+            "meets_threshold": True,
+            "decision": "APPROVE",
+            "breakdown": {
+                "ats_keyword_match": 24,
+                "role_relevance": 25,
+                "quantifiable_impact": 18,
+                "factual_integrity": 12,
+                "format_and_length": 13,
+            },
+            "strengths": ["Great AWS coverage"],
+            "critical_weaknesses": [],
+            "actionable_improvements": [],
+        }
+    }
+    en_json.write_text(json.dumps(en_json_data), encoding="utf-8")
+
+    monkeypatch.setattr("juanchito_assitant.web.api.OUTPUTS_DIR", mock_outputs)
+
+    # 1. Test GET /api/tailor/history
+    res = client.get("/api/tailor/history")
+    assert res.status_code == 200
+    items = res.json()
+    assert len(items) == 2
+
+    # Atoms has ats_score = 92
+    assert items[0]["company"] == "Atoms"
+    assert items[0]["ats_score"] == 92
+    assert items[0]["ats_decision"] == "APPROVE"
+
+    # Nubank has no JSON, so ats_score is None
+    assert items[1]["company"] == "Nubank"
+    assert items[1]["ats_score"] is None
+
+    # 2. Test GET /api/tailor/history/{filename}
+    detail_res = client.get(f"/api/tailor/history/{items[0]['filename']}")
+    assert detail_res.status_code == 200
+    detail = detail_res.json()
+    assert detail["company"] == "Atoms"
+    assert detail["markdown"] == en_content
+    assert detail["evaluation"] is not None
+    assert detail["evaluation"]["total_score"] == 92
+
+    # 3. Test 404 for non-existent file
+    not_found_res = client.get("/api/tailor/history/resume_NonExistent_20261001_000000.md")
+    assert not_found_res.status_code == 404
+
+    # 4. Test 400 for path traversal or invalid filename
+    bad_req_res = client.get("/api/tailor/history/../secret.txt")
+    assert bad_req_res.status_code in (400, 404)
+
+    # 5. Test POST /api/tailor/history/{filename}/audit (on-demand audit)
+    from unittest.mock import patch
+    from juanchito_assitant.models.evaluation import EvaluationResult, ScoreBreakdown
+
+    mock_eval = EvaluationResult(
+        total_score=88,
+        meets_threshold=True,
+        decision="APPROVE",
+        breakdown=ScoreBreakdown(
+            ats_keyword_match=23,
+            role_relevance=24,
+            quantifiable_impact=16,
+            factual_integrity=11,
+            format_and_length=14,
+        ),
+        strengths=["Strong backend skills"],
+        critical_weaknesses=[],
+        actionable_improvements=[],
+    )
+
+    async def fake_evaluate(self, job, resume_markdown, language="en"):
+        return mock_eval
+
+    with patch("juanchito_assitant.web.api.EvaluatorAgent.evaluate", new=fake_evaluate):
+        audit_res = client.post(f"/api/tailor/history/{items[1]['filename']}/audit")
+        assert audit_res.status_code == 200
+        audited_data = audit_res.json()
+        assert audited_data["ats_score"] == 88
+        assert audited_data["ats_decision"] == "APPROVE"
+        assert audited_data["evaluation"]["total_score"] == 88
+
+        # Verify JSON file was created on disk
+        created_json = mock_outputs / (items[1]["filename"].replace(".md", ".json"))
+        assert created_json.is_file()
+
+
+
 
 

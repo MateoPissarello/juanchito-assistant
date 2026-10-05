@@ -8,6 +8,7 @@ SECTION_HEADERS = {
         "profile": "## Profile",
         "skills": "## Skills",
         "experience": "## Experience",
+        "projects": "## Projects",
         "courses": "## Courses & Certifications",
         "education": "## Education",
         "additional": "## Additional",
@@ -16,11 +17,13 @@ SECTION_HEADERS = {
         "profile": "## Perfil Profesional",
         "skills": "## Habilidades",
         "experience": "## Experiencia Laboral",
+        "projects": "## Proyectos",
         "courses": "## Cursos y Certificaciones",
         "education": "## Educación",
         "additional": "## Logros Adicionales",
     },
 }
+
 
 
 class ResumeRenderer:
@@ -34,6 +37,7 @@ class ResumeRenderer:
         skills: dict[str, list[str]],
         matched_ctx: MatchedContext,
         language: str = "en",
+        projects: list[dict[str, Any]] | None = None,
     ) -> str:
         """Ensambla el documento final garantizando la estructura HTML y clases CSS exactas de resume.lol.
 
@@ -44,6 +48,7 @@ class ResumeRenderer:
             skills: Diccionario ordenado {categoria: [skills]}.
             matched_ctx: Contexto con información de contacto, certificaciones, educación y proyectos.
             language: Idioma del documento ('en' o 'es').
+            projects: Lista opcional de proyectos de software adaptados para renderizar en la sección de proyectos.
 
         Returns:
             Documento Markdown final con clases CSS y variables compatibles con resume.lol.
@@ -125,7 +130,45 @@ class ResumeRenderer:
                     lines.append(f"    - {bullet.strip()}")
             lines.append("")
 
-        # 4. Cursos y Certificaciones
+        # 4. Proyectos Técnicos Personales (GitHub) - Estilo 1 (resume.lol)
+        target_projects = projects if projects is not None else [
+            {
+                "name": gm.name,
+                "repo_url": gm.repo_url,
+                "technologies": gm.technologies,
+                "year": gm.year,
+                "bullets": gm.bullets,
+            }
+            for gm in matched_ctx.github_matches
+        ]
+
+        if target_projects:
+            lines.append(headers["projects"])
+            lines.append("")
+            for proj in target_projects:
+                p_name = proj.get("name", "Personal Project")
+                p_url = proj.get("repo_url")
+                techs = proj.get("technologies", [])
+                tech_str = ", ".join(techs) if isinstance(techs, list) else str(techs)
+                year_str = proj.get("year", "")
+
+                url_span = ""
+                if p_url:
+                    clean_display = p_url.replace("https://", "").replace("http://", "").rstrip("/")
+                    url_span = f' <span class="spacer"></span><span class="normal"> [{clean_display}]({p_url}) </span>'
+
+                lines.append(f"### {p_name}{url_span}")
+                tech_line = f"#### {tech_str}"
+                if year_str:
+                    tech_line += f' <span class="spacer"></span> {year_str}'
+                lines.append(tech_line)
+                lines.append("")
+
+                for b in proj.get("bullets", []):
+                    lines.append(f"- {b.strip()}")
+                lines.append("")
+
+        # 5. Cursos y Certificaciones
         lines.append(headers["courses"])
         lines.append("")
 
@@ -141,7 +184,7 @@ class ResumeRenderer:
                 lines.append(f"#### {c.title}{date_str}")
             lines.append("")
 
-        # 5. Educación
+        # 6. Educación
         lines.append(headers["education"])
         lines.append("")
         for edu in matched_ctx.education:
@@ -150,7 +193,7 @@ class ResumeRenderer:
             lines.append(f'#### {edu.degree} <span class="spacer"></span> {edu.location}')
             lines.append("")
 
-        # 6. Proyectos Adicionales / Maratones
+        # 7. Proyectos Adicionales / Maratones
         if matched_ctx.achievements:
             lines.append(headers["additional"])
             lines.append("")

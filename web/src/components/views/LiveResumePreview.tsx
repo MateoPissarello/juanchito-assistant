@@ -71,9 +71,10 @@ export const LiveResumePreview: React.FC<LiveResumePreviewProps> = ({ markdown }
   }
 
   return (
-    <div className="p-4 sm:p-6 flex justify-center">
+    <div className="resume-print-wrapper p-4 sm:p-6 flex justify-center">
       {/* Contenedor tipo Hoja A4/Letter de resume.lol */}
       <div
+        id="resume-print-paper"
         className="resume-paper w-full max-w-[800px] min-h-[1050px] p-8 sm:p-12 bg-white text-black shadow-2xl rounded-sm border border-zinc-300 dark:border-zinc-700"
         dangerouslySetInnerHTML={{ __html: htmlContent }}
       />

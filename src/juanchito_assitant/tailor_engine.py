@@ -163,6 +163,10 @@ class TailoringEngine:
             language=language,
         )
 
+        # Guardar reporte JSON acompañante con la evaluación ATS completa
+        json_report_path = output_path.with_suffix(".json")
+        json_report_path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
+
         if on_progress:
             await on_progress(
                 "completed",

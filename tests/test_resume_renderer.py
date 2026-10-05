@@ -109,3 +109,125 @@ def test_resume_renderer_spanish_headers():
     assert "Presente" in rendered
     assert "Remoto" in rendered
 
+
+def test_resume_renderer_with_projects_estilo_1():
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+    p = PersonalInfo(full_name="Mateo Pissarello")
+    session.add(p)
+    session.commit()
+
+    matcher = MatcherAgent(session)
+    job = JobRequirements(job_title="Backend Dev", must_have_skills=["FastAPI"], role_summary="Dev")
+    ctx = matcher.match(job)
+
+    custom_projects = [
+        {
+            "name": "Cine Colombia API",
+            "repo_url": "https://github.com/MateoPissarello/cine_colombia",
+            "technologies": ["Python", "FastAPI", "PostgreSQL", "Docker"],
+            "year": "2024",
+            "bullets": [
+                "Diseñé e implementé una arquitectura backend con **FastAPI** y **PostgreSQL**.",
+                "Configuré pipeline de CI/CD y despliegue contenerizado con **Docker**.",
+            ],
+        }
+    ]
+
+    rendered = ResumeRenderer.render(
+        headline="Backend Engineer",
+        profile_summary="Passionate engineer.",
+        experiences=[],
+        skills={"Backend": ["FastAPI"]},
+        matched_ctx=ctx,
+        language="en",
+        projects=custom_projects,
+    )
+
+    # Verifica encabezado de proyectos en inglés
+    assert "## Projects" in rendered
+    # Verifica Estilo 1 para enlace de GitHub
+    assert '### Cine Colombia API <span class="spacer"></span><span class="normal"> [github.com/MateoPissarello/cine_colombia](https://github.com/MateoPissarello/cine_colombia) </span>' in rendered
+    # Verifica línea de tecnologías y año
+    assert '#### Python, FastAPI, PostgreSQL, Docker <span class="spacer"></span> 2024' in rendered
+    # Verifica viñetas de proyecto
+    assert "- Diseñé e implementé una arquitectura backend con **FastAPI** y **PostgreSQL**." in rendered
+    assert "- Configuré pipeline de CI/CD y despliegue contenerizado con **Docker**." in rendered
+
+
+def test_resume_renderer_spanish_projects():
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+    p = PersonalInfo(full_name="Mateo Pissarello")
+    session.add(p)
+    session.commit()
+
+    matcher = MatcherAgent(session)
+    job = JobRequirements(job_title="Backend Dev", must_have_skills=["Python"], role_summary="Dev")
+    ctx = matcher.match(job)
+
+    custom_projects = [
+        {
+            "name": "Scraper Pro",
+            "repo_url": "https://github.com/MateoPissarello/scraper",
+            "technologies": ["Python", "Playwright"],
+            "year": "2024",
+            "bullets": ["Automatización de extracción de datos."],
+        }
+    ]
+
+    rendered = ResumeRenderer.render(
+        headline="Desarrollador Backend",
+        profile_summary="Resumen.",
+        experiences=[],
+        skills={"Backend": ["Python"]},
+        matched_ctx=ctx,
+        language="es",
+        projects=custom_projects,
+    )
+
+    # En español debe usar '## Proyectos'
+    assert "## Proyectos" in rendered
+    assert "### Scraper Pro" in rendered
+    assert "- Automatización de extracción de datos." in rendered
+
+
+def test_resume_renderer_projects_fallback_from_context():
+    from juanchito_assitant.models.profile import PersonalProject
+
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+    p = PersonalInfo(full_name="Mateo Pissarello")
+    session.add(p)
+    repo = PersonalProject(
+        name="goofish-scraping",
+        repo_url="https://github.com/MateoPissarello/goofish-scraping",
+        technologies=["Python", "FastAPI"],
+        bullets=["Extracción distribuida de datos."],
+    )
+    session.add(repo)
+    session.commit()
+
+    matcher = MatcherAgent(session)
+    job = JobRequirements(job_title="Python Dev", must_have_skills=["Python"], role_summary="Dev")
+    ctx = matcher.match(job)
+
+    # Si projects es None, toma github_matches del contexto automáticamente
+    rendered = ResumeRenderer.render(
+        headline="Software Engineer",
+        profile_summary="Summary.",
+        experiences=[],
+        skills={},
+        matched_ctx=ctx,
+        language="en",
+        projects=None,
+    )
+
+    assert "## Projects" in rendered
+    assert "### goofish-scraping" in rendered
+    assert "- Extracción distribuida de datos." in rendered
+
+

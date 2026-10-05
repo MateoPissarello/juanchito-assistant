@@ -74,6 +74,7 @@ class PersonalProjectMatch(BaseModel):
     technologies: list[str] = Field(default_factory=list)
     match_score: float = 0.0
     matching_skills: list[str] = Field(default_factory=list)
+    year: str = "2024"
 
 
 class MatchedContext(BaseModel):
@@ -132,9 +133,12 @@ class MatcherAgent:
                     )
                 )
 
-        # Ordenar proyectos por score descendente y seleccionar los mejores
         scored_work_projects.sort(key=lambda x: x.match_score, reverse=True)
-        selected_work = scored_work_projects[:max_work_projects]
+
+        # Habilidades cubiertas por la experiencia laboral
+        work_covered_skills: set[str] = set()
+        for wp in scored_work_projects:
+            work_covered_skills.update(wp.matching_skills)
 
         # 3. Proyectos Personales / Repositorios GitHub
         github_repos = self.session.exec(select(PersonalProject)).all()
@@ -149,6 +153,7 @@ class MatcherAgent:
                 nice_to_haves=job.nice_to_have_skills,
                 ats_keywords=job.ats_keywords,
             )
+            year_val = repo.last_pushed_at[:4] if (repo.last_pushed_at and len(repo.last_pushed_at) >= 4) else "2024"
             scored_repos.append(
                 PersonalProjectMatch(
                     name=repo.name,
@@ -158,11 +163,39 @@ class MatcherAgent:
                     technologies=repo.technologies,
                     match_score=score,
                     matching_skills=matched_skills,
+                    year=year_val,
                 )
             )
 
         scored_repos.sort(key=lambda x: x.match_score, reverse=True)
-        selected_github = scored_repos[:max_github_projects]
+
+        # Filtrar repositorios con afinidad real (score > 0 o que aporten skills no cubiertas)
+        relevant_repos = [
+            r for r in scored_repos
+            if r.match_score > 0 and (r.match_score >= 1.5 or not set(r.matching_skills).issubset(work_covered_skills))
+        ]
+        selected_github = relevant_repos[:max_github_projects]
+
+        # 4. Asignación Híbrida Dinámica (Presupuesto de 1 página: ~4 bloques técnicos en total)
+        if len(selected_github) >= 2:
+            budget_work = 2
+        elif len(selected_github) == 1:
+            budget_work = 3
+        else:
+            budget_work = max_work_projects
+
+        # Garantizar que cada empresa conserve al menos su mejor iniciativa
+        selected_work: list[WorkProjectMatch] = []
+        companies_seen: set[str] = set()
+
+        for wp in scored_work_projects:
+            if wp.company not in companies_seen and len(selected_work) < budget_work:
+                selected_work.append(wp)
+                companies_seen.add(wp.company)
+
+        for wp in scored_work_projects:
+            if wp not in selected_work and len(selected_work) < budget_work:
+                selected_work.append(wp)
 
         # 4. Certificaciones
         certs = self.session.exec(select(Certification)).all()

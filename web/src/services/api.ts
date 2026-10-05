@@ -2,6 +2,8 @@ import type {
   Certification,
   FullProfileData,
   PersonalInfo,
+  ResumeHistoryDetail,
+  ResumeHistoryItem,
   SkillCategory,
   StreamProgressEvent,
   TrackedRepo,
@@ -204,5 +206,19 @@ export const api = {
       }
     }
   },
+
+  // Historial de Currículums
+  getResumeHistory: (): Promise<ResumeHistoryItem[]> =>
+    fetch(`${API_BASE}/tailor/history`).then((res) => handleResponse<ResumeHistoryItem[]>(res)),
+
+  getResumeHistoryDetail: (filename: string): Promise<ResumeHistoryDetail> =>
+    fetch(`${API_BASE}/tailor/history/${encodeURIComponent(filename)}`).then((res) =>
+      handleResponse<ResumeHistoryDetail>(res)
+    ),
+
+  auditResumeHistory: (filename: string): Promise<ResumeHistoryDetail> =>
+    fetch(`${API_BASE}/tailor/history/${encodeURIComponent(filename)}/audit`, {
+      method: 'POST',
+    }).then((res) => handleResponse<ResumeHistoryDetail>(res)),
 };
 

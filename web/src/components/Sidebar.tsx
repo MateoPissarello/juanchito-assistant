@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   User,
   Briefcase,
@@ -8,6 +7,7 @@ import {
   Plus,
   ChevronRight,
   FolderGit2,
+  History,
 } from 'lucide-react';
 import type { WorkExperience } from '../types/profile';
 
@@ -17,7 +17,8 @@ export type NavigationTarget =
   | { view: 'repos' }
   | { view: 'skills' }
   | { view: 'certs' }
-  | { view: 'tailor' };
+  | { view: 'tailor' }
+  | { view: 'history' };
 
 interface SidebarProps {
   currentNav: NavigationTarget;
@@ -27,6 +28,7 @@ interface SidebarProps {
   activeRepoCount: number;
   skillCategoryCount: number;
   certCount: number;
+  historyCount?: number;
   onNewCompany: () => void;
 }
 
@@ -38,6 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeRepoCount,
   skillCategoryCount,
   certCount,
+  historyCount,
   onNewCompany,
 }) => {
   const isPersonalActive = currentNav.view === 'personal';
@@ -45,6 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isSkillsActive = currentNav.view === 'skills';
   const isCertsActive = currentNav.view === 'certs';
   const isTailorActive = currentNav.view === 'tailor';
+  const isHistoryActive = currentNav.view === 'history';
 
   return (
     <aside className="w-64 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/70 flex flex-col shrink-0 select-none overflow-y-auto">
@@ -178,8 +182,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
-      {/* Section 5: Tailoring Studio */}
-      <div className="p-3 mt-auto border-t border-zinc-200/60 dark:border-zinc-800/60">
+      {/* Section 5: History & Studio */}
+      <div className="p-3 mt-auto border-t border-zinc-200/60 dark:border-zinc-800/60 space-y-1.5">
+        <button
+          type="button"
+          onClick={() => onNavigate({ view: 'history' })}
+          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded text-xs transition-colors ${
+            isHistoryActive
+              ? 'bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold'
+              : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-zinc-200'
+          }`}
+        >
+          <div className="flex items-center space-x-2">
+            <History className="w-3.5 h-3.5 text-zinc-500" />
+            <span>Generated Resumes</span>
+          </div>
+          {typeof historyCount === 'number' && (
+            <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-zinc-200/60 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+              {historyCount}
+            </span>
+          )}
+        </button>
+
         <button
           type="button"
           onClick={() => onNavigate({ view: 'tailor' })}

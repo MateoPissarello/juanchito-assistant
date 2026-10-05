@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Any
+from juanchito_assitant.models.evaluation import EvaluationResult
 
 
 class PersonalInfoUpdate(BaseModel):
@@ -91,7 +92,26 @@ class CertificationUpdate(BaseModel):
 
 class TailorStreamRequest(BaseModel):
     job_input: str = Field(description="URL de la vacante o texto de la descripción del rol")
-    max_iterations: int = Field(default=2, ge=1, le=3)
+    max_iterations: int = Field(default=2, ge=1, le=5)
     language: str = Field(default="en", description="Idioma del currículum: 'en' o 'es'")
+
+
+class ResumeHistoryItem(BaseModel):
+    filename: str
+    company: str
+    role: str
+    created_at: str
+    timestamp_raw: str
+    language: str = "en"
+    headline: str | None = None
+    size_bytes: int
+    word_count: int
+    ats_score: int | None = None
+    ats_decision: str | None = None
+
+
+class ResumeHistoryDetail(ResumeHistoryItem):
+    markdown: str
+    evaluation: EvaluationResult | None = None
 
 
