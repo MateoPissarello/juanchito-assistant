@@ -29,12 +29,13 @@
 
 ## 🌟 Visión General y Propósito
 
-En el competitivo mercado de ingeniería de software, enviar currículums genéricos o sin cuantificar reduce drásticamente la tasa de conversión en los filtros de sistemas ATS (*Applicant Tracking Systems*) y en la lectura rápida de los reclutadores técnicos.
+En el competitivo mercado de ingeniería de software, enviar currículums genéricos o sin cuantificar reduce drásticamente la tasa de conversión en los filtros de sistemas ATS (_Applicant Tracking Systems_) y en la lectura rápida de los reclutadores técnicos.
 
 **juanchito-assitant** resuelve este problema actuando como un copiloto de carrera autónomo:
+
 - **Almacena una fuente única de verdad** en SQLite con tu trayectoria real: empresas, iniciativas técnicas de alto impacto, repositorios de código abierto, certificaciones y habilidades.
 - **Ingesta automáticamente tu actividad técnica** desde tus repositorios de GitHub y exportaciones oficiales de LinkedIn sin duplicar ni destruir datos previos.
-- **Adapta tu currículum a cualquier vacante** mediante un bucle de agentes que analizan los requerimientos ATS, seleccionan las experiencias más relevantes, redactan viñetas bajo la fórmula **Google XYZ** (*"Logré [X], medido por [Y], haciendo [Z]"*) y autoevalúan el resultado contra una rúbrica estricta de 100 puntos usando el evaluador crítico **Jev AI**.
+- **Adapta tu currículum a cualquier vacante** mediante un bucle de agentes que analizan los requerimientos ATS, seleccionan las experiencias más relevantes, redactan viñetas bajo la fórmula **Google XYZ** (_"Logré [X], medido por [Y], haciendo [Z]"_) y autoevalúan el resultado contra una rúbrica estricta de 100 puntos usando el evaluador crítico **Jev AI**.
 - **Genera Markdown compatible al 100% con [resume.lol](https://resume.lol)**, listo para exportar a PDF en formato estándar internacional de 1 página con diseño tipográfico impecable.
 
 ---
@@ -42,12 +43,12 @@ En el competitivo mercado de ingeniería de software, enviar currículums genér
 ## ✨ Características Principales
 
 - **🤖 Pipeline Multi-Agente Especializado**:
-  - `JobAnalyzerAgent`: Extrae rol, seniority, palabras clave ATS y habilidades obligatorias (*must-have*) y deseables (*nice-to-have*).
+  - `JobAnalyzerAgent`: Extrae rol, seniority, palabras clave ATS y habilidades obligatorias (_must-have_) y deseables (_nice-to-have_).
   - `MatcherAgent`: Algoritmo de scoring ponderado que ranquea qué proyectos empresariales y proyectos personales de GitHub responden mejor a la vacante.
   - `WriterAgent`: Redacta titulares profesionales, resúmenes técnicos y viñetas cuantificadas Google XYZ respetando límites de extensión para 1 página.
   - `EvaluatorAgent (Jev Router)`: Sistema crítico de auditoría ATS que califica en 5 dimensiones (Match de palabras clave, Relevancia del rol, Impacto cuantificable, Integridad factual y Formato).
 - **🌐 Soporte Bilingüe Nativo (Inglés / Español)**:
-  - Generación de currículums tanto en inglés como en español profesional con preservación de términos técnicos universales (*FastAPI, Docker, Kubernetes, AWS*).
+  - Generación de currículums tanto en inglés como en español profesional con preservación de términos técnicos universales (_FastAPI, Docker, Kubernetes, AWS_).
   - Configurable en Web Studio (`[ EN | ES ]`) y CLI (`-l es`).
 - **⚡ Ingesta Inteligente y Concurrente de GitHub**:
   - Inspección asíncrona de árboles de código y manifiestos (`pyproject.toml`, `package.json`, `Cargo.toml`, etc.).
@@ -137,7 +138,7 @@ sequenceDiagram
     Usuario->>Engine: Enviar vacante + Idioma (EN/ES)
     Engine->>Analyzer: Analizar requerimientos y keywords ATS
     Analyzer-->>Engine: JobRequirements (skills, keywords, seniority)
-    
+
     loop Bucle de Auto-Mejora (Máx. N iteraciones)
         Engine->>Writer: Redactar CV con iniciativas seleccionadas
         Writer-->>Engine: Borrador Markdown (resume.lol format)
@@ -301,6 +302,7 @@ uv run juanchito sync
 ```
 
 Se desplegará el menú:
+
 ```text
 ¿Qué fuente deseas sincronizar?
   [1] Solo GitHub (repositorios seguidos) [Predeterminado]
@@ -309,6 +311,7 @@ Se desplegará el menú:
 ```
 
 La consola mostrará eventos en vivo con salto automático de repositorios sin cambios:
+
 ```text
   ⏩ goofish-scraping: Omitido (sin commits nuevos desde 2026-01-29)
   🤖 cine_colombia: Analizando código con IA (Nuevo repositorio)...
@@ -331,6 +334,7 @@ uv run juanchito tailor --url "https://jobs.lever.co/empresa/vacante" --language
 ```
 
 Al terminar, la CLI mostrará el **Scorecard ATS**:
+
 ```text
 ╭───────────── Scorecard de Auditoría ATS ─────────────╮
 │ Score Global:  94 / 100                             │
@@ -362,20 +366,20 @@ uv run juanchito web
 
 El comando maestro es `juanchito` (o `uv run juanchito`):
 
-| Comando | Parámetros / Banderas | Descripción |
-| :--- | :--- | :--- |
-| **`juanchito status`** | Ninguno | Diagnóstico en vivo de SQLite, OpenRouter, GitHub API, modelos y rutas. |
-| **`juanchito tailor`** | `[JOB_TEXT]`<br>`-u, --url <URL>`<br>`-f, --file <PATH>`<br>`-l, --language <en\|es>`<br>`-m, --max-iterations <N>`<br>`--dry-run`<br>`--show-markdown` | Orquesta el bucle multi-agente para generar el currículum optimizado. |
-| **`juanchito web`** | `-h, --host <HOST>`<br>`-p, --port <PORT>`<br>`--open / --no-open`<br>`--reload` | Inicia el servidor web FastAPI con el Profile Workbench en React. |
-| **`juanchito sync`** | Menú interactivo `[1/2/3]` | Sincroniza fuentes externas hacia SQLite. |
-| **`juanchito sync github`** | `-u, --user <USER>`<br>`-a, --all`<br>`-r, --repo <NAME>`<br>`-c, --concurrency <N>`<br>`-f, --force` | Sincronización directa y configurable de repositorios de GitHub. |
-| **`juanchito sync linkedin`**| `[PDF_PATH]`<br>`-d, --dry-run`<br>`-y, --yes`<br>`--include-non-technical`<br>`-p, --provider <openrouter\|gemini>` | Ingesta no destructiva desde exportación PDF oficial de LinkedIn. |
-| **`juanchito repo list`** | Ninguno | Lista los repositorios configurados para seguimiento en SQLite. |
-| **`juanchito repo add`** | `<NAME>`<br>`-b, --branch <BRANCH>`<br>`-c, --category <CAT>`<br>`-s, --sync / --no-sync` | Registra un repo y ofrece auto-sincronizarlo de inmediato con IA. |
-| **`juanchito repo toggle`** | `<NAME>` | Activa o desactiva la sincronización de un repositorio sin borrarlo. |
-| **`juanchito repo remove`** | `<NAME>` | Elimina un repositorio de la tabla de seguimiento. |
-| **`juanchito audit`** | Ninguno | Inspección exhaustiva de todos los datos persistidos en `profile.db`. |
-| **`juanchito seed`** | `-r, --resume <PATH>`<br>`-f, --force` | Restablece la base de datos a partir del currículum semilla. |
+| Comando                       | Parámetros / Banderas                                                                                                                                   | Descripción                                                             |
+| :---------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------------------------------------------------------------------- |
+| **`juanchito status`**        | Ninguno                                                                                                                                                 | Diagnóstico en vivo de SQLite, OpenRouter, GitHub API, modelos y rutas. |
+| **`juanchito tailor`**        | `[JOB_TEXT]`<br>`-u, --url <URL>`<br>`-f, --file <PATH>`<br>`-l, --language <en\|es>`<br>`-m, --max-iterations <N>`<br>`--dry-run`<br>`--show-markdown` | Orquesta el bucle multi-agente para generar el currículum optimizado.   |
+| **`juanchito web`**           | `-h, --host <HOST>`<br>`-p, --port <PORT>`<br>`--open / --no-open`<br>`--reload`                                                                        | Inicia el servidor web FastAPI con el Profile Workbench en React.       |
+| **`juanchito sync`**          | Menú interactivo `[1/2/3]`                                                                                                                              | Sincroniza fuentes externas hacia SQLite.                               |
+| **`juanchito sync github`**   | `-u, --user <USER>`<br>`-a, --all`<br>`-r, --repo <NAME>`<br>`-c, --concurrency <N>`<br>`-f, --force`                                                   | Sincronización directa y configurable de repositorios de GitHub.        |
+| **`juanchito sync linkedin`** | `[PDF_PATH]`<br>`-d, --dry-run`<br>`-y, --yes`<br>`--include-non-technical`<br>`-p, --provider <openrouter\|gemini>`                                    | Ingesta no destructiva desde exportación PDF oficial de LinkedIn.       |
+| **`juanchito repo list`**     | Ninguno                                                                                                                                                 | Lista los repositorios configurados para seguimiento en SQLite.         |
+| **`juanchito repo add`**      | `<NAME>`<br>`-b, --branch <BRANCH>`<br>`-c, --category <CAT>`<br>`-s, --sync / --no-sync`                                                               | Registra un repo y ofrece auto-sincronizarlo de inmediato con IA.       |
+| **`juanchito repo toggle`**   | `<NAME>`                                                                                                                                                | Activa o desactiva la sincronización de un repositorio sin borrarlo.    |
+| **`juanchito repo remove`**   | `<NAME>`                                                                                                                                                | Elimina un repositorio de la tabla de seguimiento.                      |
+| **`juanchito audit`**         | Ninguno                                                                                                                                                 | Inspección exhaustiva de todos los datos persistidos en `profile.db`.   |
+| **`juanchito seed`**          | `-r, --resume <PATH>`<br>`-f, --force`                                                                                                                  | Restablece la base de datos a partir del currículum semilla.            |
 
 ---
 
@@ -457,6 +461,7 @@ uv run pytest tests/
 ```
 
 Salida esperada:
+
 ```text
 ============================== test session starts ==============================
 collected 46 items
@@ -485,6 +490,3 @@ tests/test_web_api.py .......                                            [100%]
 - **Licencia**: Distribuido bajo la licencia [MIT](LICENSE).
 
 ---
-
-> Hecho con pasión por la excelencia en ingeniería y la aceleración de carrera técnica.  
-> *¿Listo para adaptar tu currículum al estándar de las mejores empresas de tecnología? Ejecuta `uv run juanchito tailor`.*
