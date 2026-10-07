@@ -139,7 +139,10 @@ class TailoringEngine:
 
             # Si no aprueba y quedan iteraciones, preparar feedback para el Writer
             feedback = (
-                current_evaluation.actionable_improvements
+                [
+                    "RECORDATORIO DE FACTUALIDAD: No agregues tecnologías, proyectos o empresas inventadas para complacer sugerencias. Solo puedes refinar logros reales del candidato."
+                ]
+                + current_evaluation.actionable_improvements
                 + [f"Deficiencia crítica: {w}" for w in current_evaluation.critical_weaknesses]
             )
 

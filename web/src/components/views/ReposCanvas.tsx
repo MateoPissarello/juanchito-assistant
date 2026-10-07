@@ -6,6 +6,7 @@ import {
   GitBranch,
   X,
   Search,
+  Pencil,
 } from 'lucide-react';
 import type { TrackedRepo } from '../../types/profile';
 import { api } from '../../services/api';
@@ -20,6 +21,13 @@ export const ReposCanvas: React.FC<ReposCanvasProps> = ({ repos, githubUser, onR
   const [filter, setFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [search, setSearch] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingRepo, setEditingRepo] = useState<TrackedRepo | null>(null);
+  const [editForm, setEditForm] = useState({
+    category: '',
+    branch: '',
+    priority: 1,
+    notes: '',
+  });
   const [newRepo, setNewRepo] = useState({
     name: '',
     branch: '',
@@ -65,6 +73,33 @@ export const ReposCanvas: React.FC<ReposCanvasProps> = ({ repos, githubUser, onR
       onReload();
     } catch (err: any) {
       alert(err.message || 'Error al agregar');
+    }
+  };
+
+  const handleOpenEdit = (repo: TrackedRepo) => {
+    setEditingRepo(repo);
+    setEditForm({
+      category: repo.category || '',
+      branch: repo.branch || '',
+      priority: repo.priority || 1,
+      notes: repo.notes || '',
+    });
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRepo?.id) return;
+    try {
+      await api.updateRepo(editingRepo.id, {
+        category: editForm.category.trim() || null,
+        branch: editForm.branch.trim() || null,
+        priority: Number(editForm.priority),
+        notes: editForm.notes.trim() || null,
+      });
+      setEditingRepo(null);
+      onReload();
+    } catch (err: any) {
+      alert(err.message || 'Error al actualizar repositorio');
     }
   };
 
@@ -286,22 +321,142 @@ export const ReposCanvas: React.FC<ReposCanvasProps> = ({ repos, githubUser, onR
                   P{repo.priority}
                 </td>
 
-                {/* Delete */}
+                {/* Actions */}
                 <td className="py-2 px-3 text-right">
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(repo)}
-                    className="text-zinc-400 hover:text-rose-600 p-1"
-                    title="Remover de SQLite"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="inline-flex items-center space-x-1">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(repo)}
+                      className="text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-1 transition-colors"
+                      title="Editar configuración"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(repo)}
+                      className="text-zinc-400 hover:text-rose-600 p-1 transition-colors"
+                      title="Remover de SQLite"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Edit Modal */}
+      {editingRepo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950">
+              <div>
+                <h3 className="text-xs font-semibold font-mono text-zinc-900 dark:text-zinc-100">
+                  Edit Tracked Repo
+                </h3>
+                <p className="text-[11px] font-mono text-zinc-500">
+                  {editingRepo.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingRepo(null)}
+                className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-1 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="p-4 space-y-3.5 font-mono text-xs">
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 mb-1">
+                  Technical Category
+                </label>
+                <input
+                  type="text"
+                  list="category-suggestions"
+                  placeholder="e.g. AI / Multi-Agent Systems, Backend..."
+                  value={editForm.category}
+                  onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                  className="w-full px-2.5 py-1.5 rounded bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs focus:outline-none focus:border-zinc-400"
+                />
+                <datalist id="category-suggestions">
+                  <option value="AI / Multi-Agent Systems" />
+                  <option value="AI / Machine Learning" />
+                  <option value="Backend / Distributed Systems" />
+                  <option value="Backend / FastAPI" />
+                  <option value="Web Scraping / Backend" />
+                  <option value="Cloud / AWS" />
+                  <option value="DevOps / Infrastructure" />
+                  <option value="Computer Vision" />
+                  <option value="Deep Learning" />
+                  <option value="Frontend / React" />
+                </datalist>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 mb-1">
+                    Branch Override
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="default (null)"
+                    value={editForm.branch}
+                    onChange={(e) => setEditForm({ ...editForm, branch: e.target.value })}
+                    className="w-full px-2.5 py-1.5 rounded bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs focus:outline-none focus:border-zinc-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-600 dark:text-zinc-400 mb-1">
+                    Priority
+                  </label>
+                  <select
+                    value={editForm.priority}
+                    onChange={(e) => setEditForm({ ...editForm, priority: Number(e.target.value) })}
+                    className="w-full px-2.5 py-1.5 rounded bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs focus:outline-none focus:border-zinc-400"
+                  >
+                    <option value={1}>P1 (Featured / High)</option>
+                    <option value={2}>P2 (Normal / Secondary)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-zinc-600 dark:text-zinc-400 mb-1">
+                  Engineering Notes
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Optional notes or context..."
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  className="w-full px-2.5 py-1.5 rounded bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs focus:outline-none focus:border-zinc-400 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingRepo(null)}
+                  className="px-3 py-1.5 rounded text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

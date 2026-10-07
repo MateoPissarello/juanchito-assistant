@@ -249,3 +249,61 @@ async def test_sync_all_on_status_reporting():
     assert any(e[0] == "repo-a" and e[1] == "completed" for e in events)
 
 
+@pytest.mark.anyio
+async def test_sync_repo_auto_populates_category_in_tracked_and_personal_project():
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        tracked = TrackedRepo(name="juanchito-assistant", branch="main", category=None)
+        session.add(tracked)
+        session.commit()
+
+    mock_gh = MagicMock(spec=GitHubClient)
+    mock_gh.inspect_repo = AsyncMock(
+        return_value=RepoContext(
+            repo_name="juanchito-assistant",
+            owner="MateoPissarello",
+            branch="main",
+            html_url="https://github.com/MateoPissarello/juanchito-assistant",
+        )
+    )
+
+    mock_analyzer = MagicMock(spec=RepoAnalyzer)
+    mock_analyzer.analyze = AsyncMock(
+        return_value=RepoAnalysisResult(
+            has_adequate_readme=True,
+            summary="Multi-agent resume tailoring engine.",
+            bullets=["Accomplished 94% ATS score."],
+            technologies=["Python", "FastAPI", "React"],
+            category="AI / Multi-Agent Systems",
+            suggested_readme=None,
+        )
+    )
+
+    service = GitHubIngestService(
+        github_client=mock_gh,
+        analyzer=mock_analyzer,
+        engine=engine,
+    )
+
+    repo_data = {
+        "name": "juanchito-assistant",
+        "owner": {"login": "MateoPissarello"},
+        "html_url": "https://github.com/MateoPissarello/juanchito-assistant",
+        "default_branch": "main",
+        "pushed_at": "2026-10-05T12:00:00Z",
+    }
+
+    project, updated = await service.sync_repo(repo_data)
+    assert updated is True
+    assert project.name == "juanchito-assistant"
+
+    # Verificar que TrackedRepo es la única fuente de la verdad (SSOT) y se auto-pobló
+    with Session(engine) as session:
+        t_repo = session.exec(select(TrackedRepo).where(TrackedRepo.name == "juanchito-assistant")).first()
+        assert t_repo is not None
+        assert t_repo.category == "AI / Multi-Agent Systems"
+
+
+

@@ -100,10 +100,10 @@ class JobAnalyzerAgent:
             "- job_title: Specific professional title (e.g. 'Senior Backend Engineer', 'Cloud Developer').\n"
             "- company_name: Name of hiring company if mentioned, or null.\n"
             "- seniority_level: 'Junior', 'Mid', 'Senior', or 'Lead'.\n"
-            "- must_have_skills: Essential technical skills, programming languages, and frameworks explicitly required.\n"
-            "- nice_to_have_skills: Desirable or secondary technologies.\n"
+            "- must_have_skills: Essential technical skills, programming languages, and frameworks explicitly required (extract atomic tool/tech names and short concepts, e.g. ['AWS', 'CDK', 'Terraform', 'RAG', 'Multi-Agent', 'FastAPI'], avoiding long full-sentence bullets).\n"
+            "- nice_to_have_skills: Desirable or secondary technologies (extract atomic tool/tech names, e.g. ['Docker', 'Vector Databases', 'LangChain']).\n"
             "- core_responsibilities: 3 to 6 key responsibilities.\n"
-            "- ats_keywords: High-impact keywords, methodologies (e.g. CI/CD, Agile, Microservices, RAG) for ATS optimization.\n"
+            "- ats_keywords: High-impact keywords, methodologies, and specific tools (e.g. CI/CD, Agile, Microservices, RAG, LLMs) for ATS optimization.\n"
             "- role_summary: 2-3 sentence overview in English of the mission and scope of the role.\n\n"
             f"--- JOB DESCRIPTION ---\n{raw_text}\n"
         )

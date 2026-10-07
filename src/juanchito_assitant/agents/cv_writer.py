@@ -123,6 +123,8 @@ class WriterAgent:
             projects_str += "Available Technical Projects (GitHub):\n"
             for p in ctx.github_matches:
                 projects_str += f"- Project Name: {p.name}\n"
+                if p.category:
+                    projects_str += f"  Category: {p.category}\n"
                 if p.repo_url:
                     projects_str += f"  Repo URL: {p.repo_url}\n"
                 projects_str += f"  Year: {p.year}\n"
@@ -195,9 +197,9 @@ class WriterAgent:
             "1. Output ONLY the raw JSON object. Do not include markdown code markers or preamble.\n"
             "2. Tailor `headline` to match the job title and core expertise.\n"
             "3. For each experience, reformulate 2 to 4 bullets following the Google XYZ formula, bolding key technologies and quantifiable metrics (**FastAPI**, **50%**).\n"
-            "4. For each project in `projects`, formulate 1 to 3 impactful bullets following Google XYZ formula, highlighting architecture, APIs, or data pipelines.\n"
-            "5. In `prioritized_skills`, order categories and skills so that the job's must-have skills appear first.\n"
-            "6. 100% FACTUAL: Do not hallucinate technologies, jobs, or projects not present in the master profile."
+            "4. For each project in `projects`, you MUST select ONLY from the projects listed under 'Available Technical Projects (GitHub)' in the prompt. NEVER invent, fabricate, or create new projects. Formulate 1 to 3 impactful bullets following Google XYZ formula.\n"
+            "5. In `prioritized_skills`, order the candidate's verified skills so that the job's must-have skills appear first. DO NOT add tools or technologies not in the candidate's profile.\n"
+            "6. 100% FACTUAL GROUNDING (ZERO TOLERANCE): Do not hallucinate technologies, jobs, companies, or projects not present in the master profile. Fabricated entities will be automatically purged by the system."
         )
 
         content: TailoredResumeContent
@@ -207,6 +209,10 @@ class WriterAgent:
             content = await self._write_gemini(system_prompt, user_prompt)
         else:
             raise ValueError("No hay proveedor de LLM configurado. Define OPENROUTER_API_KEY o GEMINI_API_KEY.")
+
+        # Aplicar Guardrail Factual Determinista antes de renderizar
+        from juanchito_assitant.agents.guardrails import FactualGuardrail
+        content, _ = FactualGuardrail.apply(content, ctx)
 
         # Ensamblar con ResumeRenderer determinista
         rendered_md = ResumeRenderer.render(

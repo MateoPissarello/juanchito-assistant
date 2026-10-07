@@ -30,7 +30,7 @@ class GitHubIngestService:
         def _query(sess: Session) -> dict:
             item = sess.exec(select(TrackedRepo).where(TrackedRepo.name == repo_name)).first()
             if item:
-                return {"branch": item.branch, "include": item.is_active}
+                return {"branch": item.branch, "include": item.is_active, "category": item.category}
             return {}
 
         if session is not None:
@@ -130,6 +130,14 @@ class GitHubIngestService:
 
         # 4. Upsert idempotente en la base de datos
         def _persist(sess: Session) -> PersonalProject:
+            # Si el repo está en TrackedRepo y no tiene categoría asignada, poblarla automáticamente
+            tracked = sess.exec(
+                select(TrackedRepo).where(TrackedRepo.name == repo_name)
+            ).first()
+            if tracked and not tracked.category and analysis.category:
+                tracked.category = analysis.category
+                sess.add(tracked)
+
             existing = sess.exec(
                 select(PersonalProject).where(PersonalProject.name == repo_name)
             ).first()

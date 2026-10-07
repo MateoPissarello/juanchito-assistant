@@ -37,6 +37,10 @@ class RepoAnalysisResult(BaseModel):
     technologies: list[str] = Field(
         description="List of detected technologies, libraries, frameworks, and tools (e.g. ['Python', 'FastAPI', 'Playwright', 'Docker', 'OpenCV'])."
     )
+    category: str | None = Field(
+        default=None,
+        description="Concise technical category in 1-3 words in English (e.g. 'AI / Multi-Agent Systems', 'Web Scraping / Backend', 'Cloud / AWS', 'Computer Vision', 'Deep Learning', 'Backend / FastAPI', 'DevOps / Infrastructure', 'Algorithms / Data Structures').",
+    )
     suggested_readme: str | None = Field(
         default=None,
         description="Complete professional README.md in English (with title, overview, architecture/features, prerequisites, setup and usage) ONLY if has_adequate_readme is False.",
@@ -180,6 +184,9 @@ YOUR TASKS:
 3. TECHNOLOGIES & SUMMARY:
    - Extract verified technologies, frameworks, and libraries actually used in the project (`technologies`).
    - Write a concise 1-2 sentence summary of the project's engineering value (`summary`).
+
+4. TECHNICAL CATEGORY (`category`):
+   - Classify the repository into a concise, professional technical classification (1 to 3 words, e.g. "AI / Multi-Agent Systems", "Web Scraping / Backend", "Cloud / AWS", "Computer Vision", "Deep Learning", "Backend / FastAPI", "DevOps / Infrastructure", "Compilers", "Distributed Systems").
 """
 
     async def _analyze_openrouter(self, prompt: str) -> RepoAnalysisResult:
