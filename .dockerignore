@@ -1,0 +1,28 @@
+# Entornos virtuales y dependencias locales
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+
+# Node.js (se instala limpio en el stage web-builder)
+web/node_modules/
+web/dist/
+
+# Secretos, bases de datos locales y archivos privados
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+data/linkedin_profile.pdf
+data/outputs/
+
+# Git y documentación interna
+.git/
+.gitignore
+.vscode/
+.idea/
+LOGBOOK.md

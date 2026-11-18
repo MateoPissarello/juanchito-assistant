@@ -1,4 +1,5 @@
 from datetime import datetime
+import inspect
 from pathlib import Path
 import re
 from typing import Any, Awaitable, Callable
@@ -44,7 +45,7 @@ class TailoringEngine:
     ):
         self.session = session
         self.job_analyzer = job_analyzer or JobAnalyzerAgent()
-        self.matcher = matcher or MatcherAgent(session)
+        self.matcher = matcher or MatcherAgent(session, use_llm=True)
         self.writer = writer or WriterAgent()
         self.evaluator = evaluator or EvaluatorAgent()
 
@@ -83,14 +84,18 @@ class TailoringEngine:
                     "language": language,
                 },
             )
-        matched_ctx = self.matcher.match(job)
+        if hasattr(self.matcher, "amatch") and inspect.iscoroutinefunction(self.matcher.amatch):
+            matched_ctx = await self.matcher.amatch(job)
+        else:
+            matched_ctx = self.matcher.match(job)
 
         iterations: list[IterationRecord] = []
         feedback: list[str] | None = None
+        previous_draft: str | None = None
         current_markdown = ""
         current_evaluation: EvaluationResult | None = None
 
-        # 3. Bucle reflexivo de redacción y auditoría ATS
+        # 3. Bucle reflexivo con estado (Stateful Surgical Revision) y auditoría ATS híbrida
         for i in range(1, max_iterations + 1):
             if on_progress:
                 iter_label = f" (Ronda {i}/{max_iterations})" if max_iterations > 1 else ""
@@ -104,11 +109,23 @@ class TailoringEngine:
                         "language": language,
                     },
                 )
+
+            writer_kwargs: dict[str, Any] = {
+                "feedback": feedback,
+                "language": language,
+            }
+            if previous_draft is not None:
+                sig_w = inspect.signature(self.writer.write_resume)
+                if "previous_draft" in sig_w.parameters or any(
+                    p.kind == inspect.Parameter.VAR_KEYWORD for p in sig_w.parameters.values()
+                ):
+                    writer_kwargs["previous_draft"] = previous_draft
+
             current_markdown = await self.writer.write_resume(
                 matched_ctx,
-                feedback=feedback,
-                language=language,
+                **writer_kwargs,
             )
+            guardrail_alerts = list(getattr(self.writer, "last_guardrail_alerts", []))
 
             if on_progress:
                 await on_progress(
@@ -121,32 +138,56 @@ class TailoringEngine:
                         "language": language,
                     },
                 )
+
+            eval_kwargs: dict[str, Any] = {"language": language}
+            sig_e = inspect.signature(self.evaluator.evaluate)
+            if "matched_ctx" in sig_e.parameters or any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig_e.parameters.values()
+            ):
+                eval_kwargs["matched_ctx"] = matched_ctx
+
             current_evaluation = await self.evaluator.evaluate(
                 current_markdown,
                 job,
-                language=language,
+                **eval_kwargs,
             )
 
             record = IterationRecord(
                 iteration=i,
                 generated_markdown=current_markdown,
                 evaluation=current_evaluation,
+                guardrail_alerts=guardrail_alerts,
             )
             iterations.append(record)
 
             if current_evaluation.decision == "APPROVE" or current_evaluation.meets_threshold:
                 break
 
-            # Si no aprueba y quedan iteraciones, preparar feedback para el Writer
-            feedback = (
-                [
-                    "RECORDATORIO DE FACTUALIDAD: No agregues tecnologías, proyectos o empresas inventadas para complacer sugerencias. Solo puedes refinar logros reales del candidato."
-                ]
-                + current_evaluation.actionable_improvements
-                + [f"Deficiencia crítica: {w}" for w in current_evaluation.critical_weaknesses]
-            )
+            # Guardar borrador actual para edición quirúrgica en la siguiente ronda
+            previous_draft = current_markdown
 
-        assert current_evaluation is not None
+            # Preparar feedback accionable libre de alucinaciones para el Writer
+            unowned_warning = ""
+            if current_evaluation.unowned_job_skills:
+                unowned_warning = (
+                    f" PROHIBIDO inventar o mencionar estas tecnologías que el candidato NO posee: "
+                    f"{', '.join(current_evaluation.unowned_job_skills)}."
+                )
+
+            feedback = [
+                "RECORDATORIO DE FACTUALIDAD: No agregues tecnologías, proyectos o empresas inventadas para complacer sugerencias. "
+                f"Solo puedes refinar logros reales del candidato en SQLite.{unowned_warning}"
+            ]
+            for alert in guardrail_alerts:
+                feedback.append(f"ALERTA DE GUARDRAIL (BLOQUEADO EN RONDA ANTERIOR): {alert}. No vuelvas a incluirlo.")
+            feedback.extend(current_evaluation.actionable_improvements)
+
+        assert iterations, "Se requiere al menos una iteración."
+
+        # Selección Best-of-N: elegir la iteración con mayor puntaje ATS (en empate, prefiere la más reciente)
+        best_record = max(iterations, key=lambda r: (r.evaluation.total_score, r.iteration))
+        final_markdown = best_record.generated_markdown
+        final_evaluation = best_record.evaluation
 
         # 4. Guardar archivo adaptado en data/outputs/
         OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -155,12 +196,12 @@ class TailoringEngine:
         title_tag = _sanitize_filename(job.job_title)
         filename = f"resume_{company_tag}_{title_tag}_{timestamp}.md"
         output_path = OUTPUTS_DIR / filename
-        output_path.write_text(current_markdown, encoding="utf-8")
+        output_path.write_text(final_markdown, encoding="utf-8")
 
         report = TailoringReport(
             job=job,
-            final_markdown=current_markdown,
-            final_evaluation=current_evaluation,
+            final_markdown=final_markdown,
+            final_evaluation=final_evaluation,
             iterations=iterations,
             output_file_path=output_path,
             language=language,
@@ -169,6 +210,19 @@ class TailoringEngine:
         # Guardar reporte JSON acompañante con la evaluación ATS completa
         json_report_path = output_path.with_suffix(".json")
         json_report_path.write_text(report.model_dump_json(indent=2), encoding="utf-8")
+
+        # 5. Persistir en la tabla GeneratedResume (SQLite local o PostgreSQL en la nube)
+        try:
+            from juanchito_assitant.db.resume_store import persist_tailoring_report
+
+            persist_tailoring_report(
+                report=report,
+                filename=filename,
+                timestamp_raw=timestamp,
+                session=self.session,
+            )
+        except Exception:
+            pass
 
         if on_progress:
             await on_progress(

@@ -3,6 +3,7 @@ from sqlmodel import Session, SQLModel, create_engine
 
 from juanchito_assitant.agents.matcher import (
     MatcherAgent,
+    curate_project_technologies,
     extract_key_terms,
     matches_term,
 )
@@ -219,3 +220,146 @@ def test_devops_job_prioritizes_eks_and_iac():
     # Zammad on Kubernetes (EKS) and AIForms (IaC/CDK) should be top
     assert "Zammad on Kubernetes (EKS)" in selected_names
     assert "AIForms" in selected_names
+
+
+@pytest.mark.anyio
+async def test_amatch_semantic_reranker_and_match_reason():
+    import json
+    import httpx
+
+    session = get_mock_profile_session()
+
+    mock_rerank = {
+        "work_rankings": [
+            {
+                "name": "Icebergdata Core",
+                "semantic_score": 14.5,
+                "match_reason": "Direct experience building resilient data acquisition pipelines with proxy rotation.",
+            },
+            {
+                "name": "PhenoScience Backend",
+                "semantic_score": 9.0,
+                "match_reason": "Demonstrates high-concurrency backend architecture in FastAPI and PostgreSQL.",
+            },
+        ],
+        "github_rankings": [
+            {
+                "name": "goofish-scraping",
+                "semantic_score": 15.0,
+                "match_reason": "Showcases distributed anti-bot bypass and automated extraction microservices.",
+            }
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "deepseek/deepseek-chat",
+                "choices": [{"message": {"role": "assistant", "content": json.dumps(mock_rerank)}}],
+            },
+        )
+
+    matcher = MatcherAgent(
+        session,
+        api_key="sk-mock",
+        http_transport=httpx.MockTransport(handler),
+    )
+
+    # Vacante de un dominio sin palabras literales de 'scraping' pero semánticamente idéntica (Data Acquisition & Anti-Bot)
+    data_acq_job = JobRequirements(
+        job_title="Data Acquisition & Browser Automation Engineer",
+        must_have_skills=["Browser Fingerprint Evasion", "Proxy Mesh Management", "High-Throughput Ingestion"],
+        nice_to_have_skills=["Distributed Systems"],
+        core_responsibilities=["Extract public web data at scale overcoming anti-bot protections"],
+        ats_keywords=["Data Acquisition", "Automation"],
+        role_summary="Build resilient browser automation and data collection pipelines.",
+    )
+
+    ctx = await matcher.amatch(data_acq_job)
+
+    # 1. El Re-Ranker semántico debe impulsar a Icebergdata Core y goofish-scraping al Top 1
+    assert ctx.work_matches[0].project_name == "Icebergdata Core"
+    assert "proxy rotation" in (ctx.work_matches[0].match_reason or "")
+
+    assert len(ctx.github_matches) >= 1
+    assert ctx.github_matches[0].name == "goofish-scraping"
+    assert "anti-bot bypass" in (ctx.github_matches[0].match_reason or "")
+
+
+def test_curate_project_technologies_strips_low_signal_and_caps_at_max():
+    noisy_pip_list = [
+        "aiohappyeyeballs", "aiohttp", "aiosignal", "annotated-types", "anyio",
+        "attrs", "backoff", "boto3", "botocore", "cachetools", "certifi",
+        "charset-normalizer", "click", "fastapi", "google-genai", "h11",
+        "httpcore", "httpx", "idna", "numpy", "opencv-python", "packaging",
+        "pydantic", "pydantic_core", "python-dotenv", "requests", "six",
+        "starlette", "typing_extensions", "urllib3", "uvicorn", "websockets",
+        "Python",
+    ]
+    job = JobRequirements(
+        job_title="Software Engineer, GenAI Solutions",
+        must_have_skills=["Python/FastAPI", "AWS"],
+        nice_to_have_skills=["LLM APIs", "WebSockets"],
+        role_summary="Build GenAI backend services.",
+    )
+    curated = curate_project_technologies(noisy_pip_list, job=job, max_techs=6)
+
+    assert len(curated) <= 6
+    assert "Python" in curated
+    assert "FastAPI" in curated
+    assert "Google GenAI" in curated
+    # Low-signal transitive libraries must be completely stripped
+    for low_lib in ["aiohappyeyeballs", "certifi", "urllib3", "six", "typing_extensions", "h11"]:
+        assert low_lib not in [c.lower() for c in curated]
+
+
+def test_keyrus_genai_with_kubernetes_selects_zammad_and_rag_and_prioritizes_work():
+    session = get_mock_profile_session()
+    matcher = MatcherAgent(session)
+
+    keyrus_job = JobRequirements(
+        job_title="Software Engineer, GenAI Solutions",
+        company_name="Keyrus",
+        seniority_level="Mid-Senior",
+        must_have_skills=[
+            "Java/Spring",
+            "Python/FastAPI",
+            "Node.js/TypeScript",
+            "REST APIs",
+            "AWS",
+            "GCP",
+            "Git",
+            "CI/CD",
+            "Automated Testing",
+        ],
+        nice_to_have_skills=[
+            "LLM APIs",
+            "OpenAI",
+            "RAG",
+            "AI Agents",
+            "Docker",
+            "Kubernetes",
+            "Microservices",
+            "Observability",
+            "Infrastructure Automation",
+            "Cloud-Native Development",
+        ],
+        core_responsibilities=["Integrate AI services and build scalable backend APIs"],
+        ats_keywords=["CI/CD", "LLM APIs", "RAG", "Kubernetes", "Cloud-Native Development"],
+        role_summary="Build production software applications integrating GenAI and cloud-native infrastructure.",
+    )
+
+    ctx = matcher.match(keyrus_job)
+    selected_work_names = [w.project_name for w in ctx.work_matches]
+
+    # Work initiatives must include AICodeFixer, Zammad on Kubernetes (EKS), and RAG
+    assert "AICodeFixer" in selected_work_names
+    assert "Zammad on Kubernetes (EKS)" in selected_work_names
+    assert "RAG – Hacienda A Un Click Project (Cali City Hall)" in selected_work_names
+    assert "PhenoScience Backend" in selected_work_names
+
+    # Personal projects are subordinated to work initiatives (capped at 1 when 5 work initiatives are selected)
+    assert len(ctx.github_matches) == 1
+    assert ctx.github_matches[0].name == "juanchito-assistant"
+    assert len(ctx.github_matches[0].technologies) <= 6

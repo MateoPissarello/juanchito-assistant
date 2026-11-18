@@ -4,16 +4,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 
-from juanchito_assitant.web.api import router as api_router
+from juanchito_assitant.web.api import public_router, router as api_router
+from juanchito_assitant.web.auth import auth_router
 from juanchito_assitant.db.database import init_db
 
 WEB_DIST_DIR = Path(__file__).resolve().parent.parent.parent.parent / "web" / "dist"
 
 
-def create_app() -> FastAPI:
+def create_app(initialize_db: bool = True) -> FastAPI:
     """Fábrica de la aplicación FastAPI para Juanchito Assistant."""
     # Asegurar que la base de datos y sus tablas estén inicializadas
-    init_db()
+    if initialize_db:
+        try:
+            init_db()
+        except Exception:
+            pass
 
     app = FastAPI(
         title="Juanchito Assistant API & Studio",
@@ -30,7 +35,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Registrar rutas de API
+    # Registrar rutas de API (autenticación, salud pública y endpoints protegidos)
+    app.include_router(auth_router)
+    app.include_router(public_router)
     app.include_router(api_router)
 
     # Servir archivos estáticos de la UI compilada si existen

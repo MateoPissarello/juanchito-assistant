@@ -104,6 +104,9 @@ export interface EvaluationResult {
   strengths: string[];
   critical_weaknesses: string[];
   actionable_improvements: string[];
+  matched_job_skills?: string[];
+  missing_owned_skills?: string[];
+  unowned_job_skills?: string[];
 }
 
 export interface JobRequirements {
@@ -155,5 +158,12 @@ export interface ResumeHistoryDetail extends ResumeHistoryItem {
   markdown: string;
   evaluation?: EvaluationResult | null;
 }
+
+export interface AuthStatusResponse {
+  authenticated: boolean;
+  auth_enabled: boolean;
+  username?: string | null;
+}
+
 
 

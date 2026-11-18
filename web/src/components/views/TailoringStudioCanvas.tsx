@@ -165,9 +165,9 @@ export const TailoringStudioCanvas: React.FC = () => {
     .filter(Boolean).length;
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+    <div className="h-full flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950 print:h-auto print:overflow-visible print:block print:bg-white">
       {/* Top Header & Input Bar */}
-      <div className="p-4 sm:p-5 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0 print:hidden">
+      <div className="p-4 sm:p-5 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0 print:hidden no-print">
         <div className="max-w-7xl mx-auto space-y-4">
           {/* Header Title */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -382,9 +382,9 @@ export const TailoringStudioCanvas: React.FC = () => {
       </div>
 
       {/* Main Workspace: Split-View */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden print:h-auto print:overflow-visible print:block">
         {/* Workspace Toolbar */}
-        <div className="px-4 py-2 bg-zinc-100 dark:bg-zinc-900/60 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0 print:hidden">
+        <div className="px-4 py-2 bg-zinc-100 dark:bg-zinc-900/60 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0 print:hidden no-print">
           <div className="flex items-center space-x-2 text-xs">
             {/* View Mode Switches */}
             <div className="flex items-center space-x-1 p-0.5 rounded bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
@@ -429,7 +429,7 @@ export const TailoringStudioCanvas: React.FC = () => {
             {/* Word count pill */}
             {markdown && (
               <span className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400 px-2 py-0.5 rounded bg-zinc-200/60 dark:bg-zinc-800/60">
-                {wordCount} palabras · {wordCount <= 420 ? 'Óptimo para 1 página' : 'Puede exceder 1 página'}
+                {wordCount} palabras · {wordCount <= 420 ? '1 página estimada' : '2 páginas estimadas'}
               </span>
             )}
           </div>
@@ -462,7 +462,7 @@ export const TailoringStudioCanvas: React.FC = () => {
               type="button"
               onClick={handlePrintPdf}
               disabled={!markdown}
-              title="Exportar currículum en PDF vectorial de 1 página"
+              title="Exportar currículum en PDF vectorial de alta fidelidad (soporta múltiples páginas)"
               className="inline-flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-medium border border-emerald-600 dark:border-emerald-500 bg-emerald-600 dark:bg-emerald-500 text-white hover:bg-emerald-700 dark:hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-xs"
             >
               <Printer className="w-3.5 h-3.5" />
@@ -472,12 +472,12 @@ export const TailoringStudioCanvas: React.FC = () => {
         </div>
 
         {/* Content View Body */}
-        <div className="flex-1 flex overflow-hidden print:overflow-visible print:block">
+        <div className="flex-1 flex overflow-hidden print:overflow-visible print:block print:h-auto">
           {/* Left Panel: Markdown Editor */}
           <div
             className={`flex-1 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-900 text-zinc-100 ${
               viewMode === 'editor' ? 'w-full' : viewMode === 'split' ? 'w-1/2' : 'hidden'
-            } print:hidden`}
+            } print:hidden no-print`}
           >
             <div className="px-3 py-1.5 bg-zinc-950 text-zinc-400 font-mono text-[11px] border-b border-zinc-800 flex justify-between items-center">
               <span>markdown_source.md</span>
@@ -496,7 +496,7 @@ export const TailoringStudioCanvas: React.FC = () => {
           <div
             className={`flex-1 overflow-y-auto bg-zinc-200/80 dark:bg-zinc-950 ${
               viewMode === 'preview' ? 'w-full' : viewMode === 'split' ? 'w-1/2' : 'hidden print:block'
-            } print:w-full print:bg-white print:overflow-visible print:p-0 print:m-0`}
+            } print:w-full print:bg-white print:overflow-visible print:p-0 print:m-0 print:h-auto print:block`}
           >
             <LiveResumePreview markdown={markdown} />
           </div>

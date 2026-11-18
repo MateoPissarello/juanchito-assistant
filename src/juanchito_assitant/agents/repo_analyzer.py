@@ -8,10 +8,12 @@ from pydantic import BaseModel, Field
 from juanchito_assitant.config import (
     GEMINI_API_KEY,
     GEMINI_MODEL,
+    MODELS_REPO_ANALYZER,
     MODEL_REPO_ANALYZER,
     OPENROUTER_API_KEY,
     OPENROUTER_MODEL,
 )
+from juanchito_assitant.agents.llm_client import call_openrouter
 from juanchito_assitant.ingest.github_client import RepoContext
 
 try:
@@ -35,7 +37,7 @@ class RepoAnalysisResult(BaseModel):
         description="2 to 4 high-impact resume bullets in English following Google XYZ formula (Accomplished [X] measured by [Y] by doing [Z]). Highlight key technologies and metrics in bold markdown (**tech**, **metric**)."
     )
     technologies: list[str] = Field(
-        description="List of detected technologies, libraries, frameworks, and tools (e.g. ['Python', 'FastAPI', 'Playwright', 'Docker', 'OpenCV'])."
+        description="List of 4 to 7 core high-level technologies, frameworks, databases, and cloud services (e.g. ['Python', 'FastAPI', 'Playwright', 'Docker', 'OpenCV']). NEVER dump raw dependency lists or utility libraries."
     )
     category: str | None = Field(
         default=None,
@@ -98,7 +100,7 @@ class RepoAnalyzer:
         self,
         provider: str | None = None,
         api_key: str | None = None,
-        model: str | None = None,
+        model: str | list[str] | None = None,
         client=None,
         http_transport: httpx.AsyncBaseTransport | None = None,
         timeout: float = 60.0,
@@ -119,7 +121,7 @@ class RepoAnalyzer:
         # Configuración según proveedor
         if self.provider == "openrouter":
             self.api_key = api_key or OPENROUTER_API_KEY
-            self.model = model or MODEL_REPO_ANALYZER or OPENROUTER_MODEL
+            self.model = model or MODELS_REPO_ANALYZER
             self.gemini_client = None
         elif self.provider == "gemini":
             self.api_key = api_key or GEMINI_API_KEY
@@ -182,7 +184,7 @@ YOUR TASKS:
    - Highlight technologies, tools, and quantified metrics in bold markdown (e.g. "**Python**, **FastAPI**, **Docker**", "**40% latency reduction**").
 
 3. TECHNOLOGIES & SUMMARY:
-   - Extract verified technologies, frameworks, and libraries actually used in the project (`technologies`).
+   - Extract ONLY the 4 to 7 core high-level languages, frameworks, databases, AI/ML models, and cloud services used in the project (`technologies`). DO NOT list transitive dependencies, sub-packages, or low-level utility libraries from requirements.txt/package.json (never list urllib3, certifi, idna, six, typing_extensions, dotenv, etc.).
    - Write a concise 1-2 sentence summary of the project's engineering value (`summary`).
 
 4. TECHNICAL CATEGORY (`category`):
@@ -190,14 +192,7 @@ YOUR TASKS:
 """
 
     async def _analyze_openrouter(self, prompt: str) -> RepoAnalysisResult:
-        """Envía la solicitud asíncrona a OpenRouter usando httpx."""
-        url = "https://openrouter.ai/api/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "HTTP-Referer": "https://github.com/MateoPissarello/juanchito-assitant",
-            "X-Title": "juanchito-assitant",
-            "Content-Type": "application/json",
-        }
+        """Envía la solicitud asíncrona a OpenRouter usando llm_client resiliente."""
         schema_json = json.dumps(RepoAnalysisResult.model_json_schema())
         system_prompt = (
             "You are an elite Staff Software Engineer and Technical Recruiter. "
@@ -206,22 +201,19 @@ YOUR TASKS:
             'CRITICAL: Every key MUST be enclosed in double quotes followed by a colon and the value, e.g. "summary": "...". NEVER merge key and value like "summary: ...". Return ONLY the valid raw JSON object.'
         )
 
-        payload = {
-            "model": self.model,
-            "messages": [
+        response = await call_openrouter(
+            api_key=self.api_key,
+            models=self.model,
+            messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
-            "temperature": 0.2,
-            "response_format": {"type": "json_object"},
-        }
-
-        async with httpx.AsyncClient(timeout=self.timeout, transport=self.http_transport) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            content = data["choices"][0]["message"]["content"].strip()
-            return _clean_and_parse_llm_json(content)
+            temperature=0.2,
+            response_format={"type": "json_object"},
+            timeout=self.timeout,
+            http_transport=self.http_transport,
+        )
+        return _clean_and_parse_llm_json(response.content)
 
     async def _analyze_gemini(self, prompt: str) -> RepoAnalysisResult:
         """Envía la solicitud asíncrona a Google Gemini usando google-genai."""

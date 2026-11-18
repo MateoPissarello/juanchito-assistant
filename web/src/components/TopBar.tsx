@@ -1,18 +1,26 @@
 import React from 'react';
-import { Moon, Sun, Database, ExternalLink, Sparkles } from 'lucide-react';
+import { Moon, Sun, Database, ExternalLink, Sparkles, LogOut } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 interface TopBarProps {
   breadcrumbs: string[];
   dbHealthy: boolean;
   onOpenTailor: () => void;
+  authEnabled?: boolean;
+  onLogout?: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ breadcrumbs, dbHealthy, onOpenTailor }) => {
+export const TopBar: React.FC<TopBarProps> = ({
+  breadcrumbs,
+  dbHealthy,
+  onOpenTailor,
+  authEnabled = false,
+  onLogout,
+}) => {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <header className="h-12 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex items-center justify-between px-4 select-none shrink-0 z-30">
+    <header className="h-12 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex items-center justify-between px-4 select-none shrink-0 z-30 print:hidden">
       {/* Left: Brand Badge & Breadcrumbs */}
       <div className="flex items-center space-x-3">
         <div className="flex items-center space-x-1.5 font-mono text-xs font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
@@ -79,6 +87,19 @@ export const TopBar: React.FC<TopBarProps> = ({ breadcrumbs, dbHealthy, onOpenTa
         >
           {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
         </button>
+
+        {/* Logout Button (when Auth Gate is enabled) */}
+        {authEnabled && onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            title="Cerrar sesión"
+            aria-label="Cerrar sesión"
+            className="p-1.5 rounded text-zinc-500 hover:text-rose-600 dark:text-zinc-400 dark:hover:text-rose-400 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors focus-visible:ring-1 focus-visible:ring-zinc-400 focus-visible:outline-none"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
     </header>
   );

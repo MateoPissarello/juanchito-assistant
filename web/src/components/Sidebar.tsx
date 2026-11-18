@@ -51,7 +51,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isHistoryActive = currentNav.view === 'history';
 
   return (
-    <aside className="w-64 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/70 flex flex-col shrink-0 select-none overflow-y-auto">
+    <aside className="w-64 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/70 flex flex-col shrink-0 select-none overflow-y-auto print:hidden">
       {/* Section 1: Perfil y Datos Base */}
       <div className="p-3 border-b border-zinc-200/60 dark:border-zinc-800/60">
         <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 font-semibold px-2 mb-1 block">

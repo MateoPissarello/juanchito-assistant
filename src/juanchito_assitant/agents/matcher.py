@@ -1,7 +1,12 @@
+import json
+import logging
 import re
+import httpx
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
+from juanchito_assitant.agents.llm_client import call_openrouter
+from juanchito_assitant.config import MODELS_JOB_ANALYZER, OPENROUTER_API_KEY
 from juanchito_assitant.models.job import JobRequirements
 from juanchito_assitant.models.profile import (
     AdditionalAchievement,
@@ -14,6 +19,8 @@ from juanchito_assitant.models.profile import (
     WorkExperience,
     WorkProject,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize(term: str) -> str:
@@ -55,7 +62,12 @@ TECHNICAL_SYNONYMS = {
         "agents", "agentic", "multi-agent", "multi agent",
         "agent frameworks", "agent orchestration", "agent execution",
         "tool use", "tool-using", "agentic-ai", "agent definition",
-        "multi-agent system", "multi-agent systems",
+        "multi-agent system", "multi-agent systems", "claudecode", "mcp",
+    ],
+    "agents": [
+        "agent", "agentic", "multi-agent", "multi agent",
+        "agent frameworks", "agent orchestration", "agent execution",
+        "tool use", "tool-using", "agentic-ai", "claudecode", "mcp",
     ],
     "agentic": [
         "agents", "agent", "multi-agent", "multi agent",
@@ -116,7 +128,207 @@ TECHNICAL_SYNONYMS = {
     "devops": [
         "ci/cd", "continuous integration", "github actions", "docker", "argocd",
     ],
+    "ci/cd": [
+        "continuous integration", "continuous deployment", "continuous delivery",
+        "argocd", "codepipeline", "github actions", "gitlab ci",
+    ],
+    "infrastructure automation": [
+        "infrastructure as code", "iac", "aws cdk", "cdk", "terraform",
+        "cloudformation", "argocd", "declarative infrastructure",
+    ],
+    "observability": [
+        "monitoring", "grafana", "cloudwatch", "prometheus", "telemetry",
+        "logging", "quicksight",
+    ],
+    "microservices": [
+        "microservice", "serverless", "fargate", "cloud run", "eks",
+    ],
+    "event-driven": [
+        "event-driven systems", "eventbridge", "sqs", "sns",
+        "dynamodb streams", "webhooks", "sse", "websockets",
+    ],
+    "event-driven systems": [
+        "event-driven", "eventbridge", "sqs", "sns",
+        "dynamodb streams", "webhooks", "sse", "websockets",
+    ],
+    "messaging": [
+        "messaging platforms", "sqs", "sns", "eventbridge",
+        "ses", "websockets", "sse", "kafka", "rabbitmq",
+    ],
+    "messaging platforms": [
+        "messaging", "sqs", "sns", "eventbridge", "ses", "websockets", "sse",
+    ],
+    "asynchronous processing": [
+        "async", "asynchronous", "asíncronas", "asyncio",
+        "eventbridge", "sqs", "lambda", "sse", "websockets",
+    ],
+    "automated testing": [
+        "unit tests", "unit testing", "pytest", "unittest", "sonarqube", "testing",
+    ],
+    "application security": [
+        "keycloak", "oauth", "oauth2", "jwt", "cognito", "kms", "iam", "authentication",
+    ],
+    "llm apis": [
+        "openai", "openai api", "claude", "claudecode", "gemini",
+        "bedrock", "openrouter", "llm", "llms",
+    ],
+    "ai agents": [
+        "agent", "agents", "agentic", "multi-agent", "claudecode", "mcp", "tool calling",
+    ],
+    "tool calling": [
+        "mcp", "function calling", "tool use", "agent", "multi-agent",
+    ],
+    "cloud-native development": [
+        "cloud-native", "cloud native", "serverless", "kubernetes",
+        "eks", "fargate", "lambda", "cloud run",
+    ],
+    "spring": [
+        "spring boot",
+    ],
+    "sql": [
+        "postgresql", "postgres", "mysql", "sqlalchemy", "sqlmodel",
+        "sqlite", "relational database", "relational databases",
+        "bases de datos relacionales",
+    ],
+    "apis rest": [
+        "api", "apis", "rest", "restful", "rest api", "rest apis",
+        "fastapi", "spring boot", "endpoints",
+    ],
+    "api rest": [
+        "api", "apis", "rest", "restful", "rest api", "rest apis",
+        "fastapi", "spring boot", "endpoints",
+    ],
+    "rest api": [
+        "api", "apis", "rest", "restful", "apis rest", "api rest",
+        "fastapi", "spring boot", "endpoints",
+    ],
+    "rest apis": [
+        "api", "apis", "rest", "restful", "apis rest", "api rest",
+        "fastapi", "spring boot", "endpoints",
+    ],
+    "microservicios": [
+        "microservices", "microservice", "serverless", "fargate", "cloud run", "eks",
+    ],
+    "integraciones": [
+        "integrations", "api", "apis", "rest", "webhooks", "eventbridge", "sqs", "sns",
+    ],
+    "json": [
+        "rest", "restful", "rest api", "fastapi", "spring boot", "pydantic", "http",
+    ],
 }
+
+# Librerías utilitarias, sub-dependencias transitivas y paquetes de bajo nivel que NUNCA deben saturar el subtítulo de un proyecto
+LOW_SIGNAL_LIBRARIES = {
+    "aiohappyeyeballs", "aiosignal", "annotated-types", "anyio", "attrs", "backoff",
+    "botocore", "cachetools", "certifi", "charset-normalizer", "click", "contourpy",
+    "cycler", "dataclasses-json", "defusedxml", "dotenv", "python-dotenv", "fonttools",
+    "frozenlist", "google-auth", "h11", "httpcore", "idna", "jmespath", "kiwisolver",
+    "marshmallow", "multidict", "mypy_extensions", "mypy-extensions", "packaging",
+    "propcache", "py-cpuinfo", "pyasn1", "pyasn1_modules", "pyasn1-modules",
+    "pydantic_core", "pydantic-core", "pyparsing", "python-dateutil", "python-multipart",
+    "pyyaml", "rsa", "s3transfer", "six", "sniffio", "starlette", "tqdm",
+    "typing-inspect", "typing-inspection", "typing_extensions", "typing-extensions",
+    "urllib3", "yarl", "uvicorn", "httpx", "requests", "aiohttp", "json repair",
+    "json-repair", "json_repair", "rich", "typer", "eslint", "prettier",
+    "class-variance-authority", "clsx", "tailwind-merge", "lucide-react",
+    "serverless-offline", "serverless-plugin-typescript", "wscat", "uuid",
+    "poetry", "pip", "uv", "setuptools", "wheel", "gradle", "cmake", "makefile",
+    "gcc", "jupyter notebook", "pypdf", "pillow",
+}
+
+CORE_HIGH_SIGNAL_TECHS = {
+    "python", "java", "typescript", "javascript", "c++", "go", "rust", "kotlin", "sql",
+    "fastapi", "django", "spring boot", "react", "next.js", "node.js", "express",
+    "aws", "aws lambda", "aws s3", "aws ecs fargate", "aws dynamodb", "aws cdk",
+    "aws sqs", "aws ec2", "aws cognito", "dynamodb", "s3", "lambda", "fargate", "eks",
+    "terraform", "docker", "kubernetes", "postgresql", "sqlmodel",
+    "sqlalchemy", "redis", "openai", "google gemini", "google genai", "google-genai",
+    "openrouter", "llm", "llms", "multi-agent", "rag", "tensorflow", "keras",
+    "pytorch", "scikit-learn", "opencv", "opencv-python", "playwright", "pandas",
+    "numpy", "websockets", "server-sent events (sse)", "oauth2", "jwt", "pytest",
+}
+
+
+def curate_project_technologies(
+    raw_techs: list[str],
+    job: JobRequirements | None = None,
+    max_techs: int = 6,
+) -> list[str]:
+    """Filtra librerías secundarias/transitivas y selecciona las `max_techs` tecnologías más relevantes para la vacante."""
+    if not raw_techs:
+        return []
+
+    job_terms: list[str] = []
+    if job is not None:
+        job_terms = extract_key_terms(
+            list(job.must_have_skills) + list(job.nice_to_have_skills) + list(job.ats_keywords)
+        )
+
+    # Normalizar nombres de paquetes pip conocidos a nombres presentables si no hay equivalente limpio
+    DISPLAY_NORMALIZATION = {
+        "google-genai": "Google GenAI",
+        "opencv-python": "OpenCV",
+        "fastapi": "FastAPI",
+        "pydantic": "Pydantic",
+        "websockets": "WebSockets",
+        "boto3": "AWS SDK (Boto3)",
+        "numpy": "NumPy",
+        "scipy": "SciPy",
+        "matplotlib": "Matplotlib",
+    }
+
+    filtered: list[tuple[int, str, str]] = []
+    seen_lower: set[str] = set()
+
+    for idx, t in enumerate(raw_techs):
+        t_clean = t.strip()
+        if not t_clean:
+            continue
+        t_low = t_clean.lower()
+        if t_low in LOW_SIGNAL_LIBRARIES:
+            continue
+        if any(t_low.startswith(prefix) for prefix in ("@radix-ui/", "@types/", "eslint-", "vite-plugin-")):
+            continue
+
+        display_name = DISPLAY_NORMALIZATION.get(t_low, t_clean)
+        d_low = display_name.lower()
+        if d_low in seen_lower:
+            continue
+        seen_lower.add(d_low)
+        filtered.append((idx, display_name, t_low))
+
+    # Fallback si todas fueron filtradas (ej. repo pequeño con solo ['C', 'GCC'])
+    if not filtered:
+        for idx, t in enumerate(raw_techs[:max_techs]):
+            t_clean = t.strip()
+            if t_clean and t_clean.lower() not in seen_lower:
+                seen_lower.add(t_clean.lower())
+                filtered.append((idx, t_clean, t_clean.lower()))
+
+    # Si tras limpiar librerías de bajo nivel ya tenemos <= max_techs tecnologías, preservar su orden natural
+    if len(filtered) <= max_techs:
+        return [item[1] for item in filtered]
+
+    PRIMARY_LANGUAGES = {"python", "java", "typescript", "javascript", "c++", "c", "go", "rust", "kotlin", "sql"}
+
+    def _tech_priority(item: tuple[int, str, str]) -> tuple[int, int, int, int]:
+        idx, display_name, t_low = item
+        d_low = display_name.lower()
+        # 1. Lenguaje principal del proyecto siempre encabezando el stack
+        is_lang = 1 if (t_low in PRIMARY_LANGUAGES or d_low in PRIMARY_LANGUAGES) else 0
+        # 2. ¿Hace match con algún requisito de la vacante?
+        job_hit = 0
+        if job_terms:
+            for jt in job_terms:
+                if matches_term(jt, f"{t_low} {d_low}", {t_low, d_low}):
+                    job_hit = 1
+                    break
+        # 3. ¿Es un framework, base de datos, cloud o motor IA principal?
+        core_hit = 1 if (t_low in CORE_HIGH_SIGNAL_TECHS or d_low in CORE_HIGH_SIGNAL_TECHS) else 0
+        return (-is_lang, -job_hit, -core_hit, idx)
+
+    filtered.sort(key=_tech_priority)
+    return [item[1] for item in filtered[:max_techs]]
 
 STOP_PREFIXES = [
     "experience with ", "experience in ", "experience of ", "experience implementing ",
@@ -140,24 +352,29 @@ def extract_key_terms(raw_list: list[str]) -> list[str]:
         if not raw_strip:
             continue
 
-        # 1. Si ya es un término corto (1 a 2 palabras) sin prefijo de parada
-        if len(raw_strip.split()) <= 2 and not any(raw_strip.lower().startswith(p) for p in STOP_PREFIXES):
-            clean_tok = re.sub(r"^[^\w]+|[^\w]+$", "", raw_strip)
+        # 1. Si ya es un término corto (1 a 2 palabras) sin prefijo de parada ni barra '/' compuesta
+        if (
+            len(raw_strip.split()) <= 2
+            and ("/" not in raw_strip or raw_strip.lower() in ("ci/cd", "i/o", "tcp/ip", "pl/sql"))
+            and not any(raw_strip.lower().startswith(p) for p in STOP_PREFIXES)
+        ):
+            clean_tok = re.sub(r"^[^\w\.#\+]+|[^\w\.#\+]+$", "", raw_strip)
             if len(clean_tok) >= 2:
                 found.add(clean_tok)
 
         # 2. Términos entre paréntesis (ej. (CDK, CloudFormation, or Terraform))
         for pm in re.findall(r"\((.*?)\)", raw_strip):
             for sub in re.split(r"[,;/+]|\bor\b|\band\b", pm):
-                sub_clean = re.sub(r"^[^\w]+|[^\w]+$", "", sub.strip())
+                sub_clean = re.sub(r"^[^\w\.#\+]+|[^\w\.#\+]+$", "", sub.strip())
                 if len(sub_clean) >= 2:
                     found.add(sub_clean)
 
-        # 3. Remover paréntesis y descomponer chunks
+        # 3. Remover paréntesis y descomponer chunks (incluyendo compuestos con '/' salvo 'ci/cd')
         no_parens = re.sub(r"\(.*?\)", "", raw_strip)
-        chunks = re.split(r"[,;:\n]|\bor\b|\band\b", no_parens)
+        no_parens_protected = re.sub(r"\bci/cd\b", "CI_CD_TOKEN", no_parens, flags=re.IGNORECASE)
+        chunks = re.split(r"[,;:\n/]|\bor\b|\band\b", no_parens_protected)
         for chunk in chunks:
-            c = chunk.strip()
+            c = chunk.replace("CI_CD_TOKEN", "ci/cd").strip()
             c_low = c.lower()
             for p in STOP_PREFIXES:
                 if c_low.startswith(p):
@@ -276,6 +493,10 @@ class WorkProjectMatch(BaseModel):
     technologies: list[str] = Field(default_factory=list)
     match_score: float = 0.0
     matching_skills: list[str] = Field(default_factory=list)
+    match_reason: str | None = Field(
+        default=None,
+        description="Justificación técnica de por qué esta iniciativa aporta valor al cargo objetivo.",
+    )
 
 
 class PersonalProjectMatch(BaseModel):
@@ -288,6 +509,28 @@ class PersonalProjectMatch(BaseModel):
     match_score: float = 0.0
     matching_skills: list[str] = Field(default_factory=list)
     year: str = "2024"
+    match_reason: str | None = Field(
+        default=None,
+        description="Justificación técnica de por qué este repositorio personal aporta valor al cargo objetivo.",
+    )
+
+
+class SemanticItemScore(BaseModel):
+    name: str = Field(description="Nombre exacto de la iniciativa laboral o repositorio de GitHub.")
+    semantic_score: float = Field(
+        ...,
+        ge=0.0,
+        le=15.0,
+        description="Puntaje de afinidad semántica y arquitectónica con el rol (0.0 a 15.0).",
+    )
+    match_reason: str = Field(
+        description="Explicación concisa (1 oración) de por qué este proyecto es relevante para la vacante y qué enfoque técnico destacar."
+    )
+
+
+class SemanticRerankResult(BaseModel):
+    work_rankings: list[SemanticItemScore] = Field(default_factory=list)
+    github_rankings: list[SemanticItemScore] = Field(default_factory=list)
 
 
 class MatchedContext(BaseModel):
@@ -302,18 +545,37 @@ class MatchedContext(BaseModel):
 
 
 class MatcherAgent:
-    """Agente para cruzar los requisitos del empleo contra los activos de profile.db."""
+    """Agente híbrido (Léxico + Re-Ranker Semántico LLM) para cruzar los requisitos del empleo contra profile.db."""
 
-    def __init__(self, session: Session):
+    def __init__(
+        self,
+        session: Session,
+        api_key: str | None = None,
+        model: str | list[str] | None = None,
+        use_llm: bool = False,
+        http_transport: httpx.AsyncBaseTransport | None = None,
+        timeout: float = 35.0,
+    ):
         self.session = session
+        self.use_llm = use_llm or (api_key is not None) or (http_transport is not None)
+        self.api_key = api_key or (OPENROUTER_API_KEY if self.use_llm else "")
+        self.model = model or MODELS_JOB_ANALYZER
+        self.http_transport = http_transport
+        self.timeout = timeout
 
-    def match(
+    def _compute_lexical_candidates(
         self,
         job: JobRequirements,
-        max_work_projects: int = 4,
-        max_github_projects: int = 2,
-    ) -> MatchedContext:
-        """Puntúa y selecciona los activos más relevantes para la vacante."""
+    ) -> tuple[
+        PersonalInfo,
+        list[WorkProjectMatch],
+        list[PersonalProjectMatch],
+        list[Certification],
+        list[SkillCategory],
+        list[Education],
+        list[AdditionalAchievement],
+    ]:
+        """Calcula el puntaje léxico base para todas las iniciativas y repositorios de SQLite."""
         # 1. Información Personal
         personal = self.session.exec(select(PersonalInfo)).first() or PersonalInfo()
 
@@ -356,6 +618,12 @@ class MatcherAgent:
                     is_ai_role=is_ai_role,
                     is_cloud_devops_role=is_cloud_devops_role,
                 )
+                clean_matched = [s for s in matched_skills if not s.startswith("role:")]
+                default_reason = (
+                    f"Coincidencia directa con tecnologías clave del rol ({', '.join(clean_matched[:5])})."
+                    if clean_matched
+                    else "Experiencia empresarial verificada con habilidades transferibles de ingeniería de software."
+                )
                 scored_work_projects.append(
                     WorkProjectMatch(
                         company=exp.company,
@@ -367,15 +635,11 @@ class MatcherAgent:
                         technologies=proj.technologies,
                         match_score=score,
                         matching_skills=matched_skills,
+                        match_reason=default_reason,
                     )
                 )
 
         scored_work_projects.sort(key=lambda x: x.match_score, reverse=True)
-
-        # Habilidades cubiertas por la experiencia laboral
-        work_covered_skills: set[str] = set()
-        for wp in scored_work_projects:
-            work_covered_skills.update(wp.matching_skills)
 
         # 4. Proyectos Personales / Repositorios GitHub
         github_repos = self.session.exec(select(PersonalProject)).all()
@@ -407,7 +671,14 @@ class MatcherAgent:
                 score += 5.0
                 matched_skills.append("role:cloud_category")
 
+            clean_repo_matched = [s for s in matched_skills if not s.startswith("role:")]
+            repo_reason = (
+                f"Demuestra implementación práctica en {', '.join(clean_repo_matched[:5])}."
+                if clean_repo_matched
+                else f"Proyecto técnico relevante ({repo_cat or 'Software Engineering'})."
+            )
             year_val = repo.last_pushed_at[:4] if (repo.last_pushed_at and len(repo.last_pushed_at) >= 4) else "2024"
+            curated_techs = curate_project_technologies(repo.technologies, job=job, max_techs=6)
             scored_repos.append(
                 PersonalProjectMatch(
                     name=repo.name,
@@ -415,53 +686,17 @@ class MatcherAgent:
                     description=repo.description,
                     category=repo_cat or None,
                     bullets=repo.bullets,
-                    technologies=repo.technologies,
+                    technologies=curated_techs,
                     match_score=score,
                     matching_skills=matched_skills,
                     year=year_val,
+                    match_reason=repo_reason,
                 )
             )
 
         scored_repos.sort(key=lambda x: x.match_score, reverse=True)
 
-        # Filtrar repositorios con afinidad real (score >= 4.0 o que aporten skills no cubiertas)
-        relevant_repos = [
-            r for r in scored_repos
-            if r.match_score >= 4.0 or (r.match_score > 0 and not set(r.matching_skills).issubset(work_covered_skills))
-        ]
-        selected_github = relevant_repos[:max_github_projects]
-
-        # 5. Asignación Dinámica de Presupuesto
-        # Si hay repositorios seleccionados, asignamos 3 iniciativas laborales; si no, 4
-        if len(selected_github) >= 1:
-            budget_work = 3
-        else:
-            budget_work = max_work_projects
-
-        # 6. Selección Inteligente de Iniciativas Laborales
-        selected_work: list[WorkProjectMatch] = []
-        companies_seen: set[str] = set()
-        top_score = scored_work_projects[0].match_score if scored_work_projects else 0.0
-        high_threshold = max(4.0, top_score * 0.5)
-
-        # Pase 1: Iniciativas de alta afinidad técnica en orden de puntuación
-        for wp in scored_work_projects:
-            if wp.match_score >= high_threshold and len(selected_work) < budget_work:
-                selected_work.append(wp)
-                companies_seen.add(wp.company)
-
-        # Pase 2: Garantizar representación de empresas con score positivo no vistas
-        for wp in scored_work_projects:
-            if wp.company not in companies_seen and wp.match_score > 0 and len(selected_work) < budget_work:
-                selected_work.append(wp)
-                companies_seen.add(wp.company)
-
-        # Pase 3: Rellenar cupo restante con los mejores proyectos disponibles
-        for wp in scored_work_projects:
-            if wp not in selected_work and len(selected_work) < budget_work:
-                selected_work.append(wp)
-
-        # 7. Certificaciones
+        # 5. Certificaciones
         certs = self.session.exec(select(Certification)).all()
         def cert_relevance(c: Certification) -> int:
             t = f"{c.issuer} {c.title}".lower()
@@ -469,7 +704,7 @@ class MatcherAgent:
 
         certs.sort(key=cert_relevance, reverse=True)
 
-        # 8. Habilidades (Ordenar categorías según relevancia para el rol)
+        # 6. Habilidades (Ordenar categorías según relevancia para el rol)
         categories = self.session.exec(select(SkillCategory)).all()
         def category_score(cat: SkillCategory) -> int:
             skills_str = " ".join(cat.skills).lower()
@@ -477,9 +712,140 @@ class MatcherAgent:
 
         categories.sort(key=category_score, reverse=True)
 
-        # 9. Educación y Logros Adicionales
+        # 7. Educación y Logros Adicionales
         education = self.session.exec(select(Education)).all()
         achievements = self.session.exec(select(AdditionalAchievement)).all()
+
+        return (
+            personal,
+            scored_work_projects,
+            scored_repos,
+            certs,
+            categories,
+            education,
+            achievements,
+        )
+
+    def _finalize_selection(
+        self,
+        job: JobRequirements,
+        personal: PersonalInfo,
+        scored_work_projects: list[WorkProjectMatch],
+        scored_repos: list[PersonalProjectMatch],
+        certs: list[Certification],
+        categories: list[SkillCategory],
+        education: list[Education],
+        achievements: list[AdditionalAchievement],
+        max_work_projects: int = 5,
+        max_github_projects: int = 2,
+    ) -> MatchedContext:
+        """Prioriza iniciativas laborales relevantes (incluyendo cobertura complementaria de skills) por encima de proyectos personales."""
+        # Filtrar stubs redundantes sin tecnologías si existe otra iniciativa de la misma empresa con nombre solapado
+        filtered_work: list[WorkProjectMatch] = []
+        for wp in scored_work_projects:
+            if not wp.technologies and len(wp.bullets) <= 1:
+                wp_words = {w for w in _normalize(wp.project_name).split() if len(w) >= 3}
+                has_richer_sibling = any(
+                    other is not wp
+                    and other.company == wp.company
+                    and other.technologies
+                    and len(wp_words & {w for w in _normalize(other.project_name).split() if len(w) >= 3}) >= 2
+                    for other in scored_work_projects
+                )
+                if has_richer_sibling:
+                    continue
+            filtered_work.append(wp)
+
+        filtered_work.sort(key=lambda x: (x.match_score, len(x.technologies)), reverse=True)
+        budget_work = max_work_projects
+
+        selected_work: list[WorkProjectMatch] = []
+        companies_seen: set[str] = set()
+        covered_work_skills: set[str] = set()
+        top_score = filtered_work[0].match_score if filtered_work else 0.0
+        high_threshold = max(6.0, top_score * 0.55)
+
+        def _real_skills(skills: list[str]) -> set[str]:
+            # Normaliza familias de sinónimos redundantes para que cubrir una skill realmente distinta (ej. Kubernetes o RAG)
+            # tenga mucho más peso que repetir variantes del mismo concepto
+            CANONICAL_SKILL_MAP = {
+                "event-driven systems": "event-driven",
+                "messaging platforms": "messaging",
+                "cloud-native development": "cloud-native",
+                "infrastructure as code": "iac",
+                "infrastructure automation": "iac",
+                "rest": "apis",
+                "api": "apis",
+                "llms": "llm",
+                "llm apis": "llm",
+                "ai agents": "agent",
+                "agents": "agent",
+            }
+            return {CANONICAL_SKILL_MAP.get(s, s) for s in skills if not s.startswith("role:")}
+
+        # Pase 1: Garantizar la mejor iniciativa de cada empresa que tenga afinidad real con la vacante
+        for wp in filtered_work:
+            if wp.company not in companies_seen and wp.match_score > 0 and len(selected_work) < budget_work:
+                selected_work.append(wp)
+                companies_seen.add(wp.company)
+                covered_work_skills.update(_real_skills(wp.matching_skills))
+
+        # Pase 2: Selección Iterativa por Cobertura Complementaria (Greedy Set Cover)
+        # Permite incluir iniciativas adicionales de una misma empresa (ej. Zammad on Kubernetes o RAG en Blend360)
+        # cuando cubren requisitos de la vacante aún no cubiertos por las iniciativas del Pase 1.
+        while len(selected_work) < budget_work:
+            remaining = [wp for wp in filtered_work if wp not in selected_work and wp.match_score > 0]
+            if not remaining:
+                break
+
+            def _complementary_rank(wp: WorkProjectMatch) -> tuple[int, float, int]:
+                novel = _real_skills(wp.matching_skills) - covered_work_skills
+                # Greedy Set Cover: priorizar primero la iniciativa que cubra MÁS requisitos nuevos aún no demostrados
+                comp_score = wp.match_score + (8.0 * len(novel)) + (0.15 * len(wp.technologies))
+                return (len(novel), comp_score, len(wp.technologies))
+
+            best_wp = max(remaining, key=_complementary_rank)
+            novel_skills = sorted(_real_skills(best_wp.matching_skills) - covered_work_skills)
+
+            # Gate de relevancia: entra si aporta al menos 1 skill nueva requerida por la vacante o supera high_threshold
+            if (len(novel_skills) >= 1 and best_wp.match_score >= 3.0) or best_wp.match_score >= high_threshold:
+                if novel_skills and (not best_wp.match_reason or best_wp.match_reason.startswith("Coincidencia directa")):
+                    best_wp.match_reason = (
+                        f"Aporta cobertura complementaria clave en {', '.join(novel_skills[:5])} "
+                        f"(además de {', '.join(_real_skills(best_wp.matching_skills))})."
+                    )
+                selected_work.append(best_wp)
+                companies_seen.add(best_wp.company)
+                covered_work_skills.update(_real_skills(best_wp.matching_skills))
+            else:
+                break
+
+        # Pase 3: Fallback mínimo si la vacante no tuvo términos léxicos en común
+        for wp in filtered_work:
+            if wp not in selected_work and len(selected_work) < min(3, budget_work):
+                selected_work.append(wp)
+                covered_work_skills.update(_real_skills(wp.matching_skills))
+
+        # 4. Selección de Proyectos Personales (GitHub) subordinada a la Experiencia Laboral
+        for r in scored_repos:
+            r.technologies = curate_project_technologies(r.technologies, job=job, max_techs=6)
+
+        scored_repos.sort(
+            key=lambda r: (
+                r.match_score + 3.0 * len(_real_skills(r.matching_skills) - covered_work_skills),
+                r.match_score,
+            ),
+            reverse=True,
+        )
+
+        relevant_repos = [
+            r for r in scored_repos
+            if r.match_score >= 4.0 or (r.match_score > 0 and not _real_skills(r.matching_skills).issubset(covered_work_skills))
+        ]
+
+        # Si ya incluimos 5 iniciativas laborales ricas, limitar proyectos personales a máximo 1 para cuidar el presupuesto de 1 página
+        effective_github_max = 1 if len(selected_work) >= 5 else max_github_projects
+        selected_github = relevant_repos[:effective_github_max]
 
         return MatchedContext(
             personal_info=personal,
@@ -491,3 +857,152 @@ class MatcherAgent:
             achievements=achievements,
             target_job=job,
         )
+
+    def match(
+        self,
+        job: JobRequirements,
+        max_work_projects: int = 5,
+        max_github_projects: int = 2,
+    ) -> MatchedContext:
+        """Puntúa y selecciona los activos más relevantes para la vacante (modo síncrono / léxico)."""
+        (
+            personal,
+            scored_work_projects,
+            scored_repos,
+            certs,
+            categories,
+            education,
+            achievements,
+        ) = self._compute_lexical_candidates(job)
+
+        return self._finalize_selection(
+            job=job,
+            personal=personal,
+            scored_work_projects=scored_work_projects,
+            scored_repos=scored_repos,
+            certs=certs,
+            categories=categories,
+            education=education,
+            achievements=achievements,
+            max_work_projects=max_work_projects,
+            max_github_projects=max_github_projects,
+        )
+
+    async def amatch(
+        self,
+        job: JobRequirements,
+        max_work_projects: int = 5,
+        max_github_projects: int = 2,
+    ) -> MatchedContext:
+        """Puntúa y selecciona activos combinando el motor léxico con un Re-Ranker Semántico LLM y justificación (`match_reason`)."""
+        (
+            personal,
+            scored_work_projects,
+            scored_repos,
+            certs,
+            categories,
+            education,
+            achievements,
+        ) = self._compute_lexical_candidates(job)
+
+        if self.use_llm and self.api_key and (scored_work_projects or scored_repos):
+            try:
+                await self._apply_semantic_rerank(job, scored_work_projects, scored_repos[:12])
+            except Exception as exc:
+                logger.warning(
+                    "Fallback a matching léxico determinista (Re-Ranker semántico omitido por: %s)",
+                    exc,
+                )
+
+        return self._finalize_selection(
+            job=job,
+            personal=personal,
+            scored_work_projects=scored_work_projects,
+            scored_repos=scored_repos,
+            certs=certs,
+            categories=categories,
+            education=education,
+            achievements=achievements,
+            max_work_projects=max_work_projects,
+            max_github_projects=max_github_projects,
+        )
+
+    async def _apply_semantic_rerank(
+        self,
+        job: JobRequirements,
+        work_candidates: list[WorkProjectMatch],
+        repo_candidates: list[PersonalProjectMatch],
+    ) -> None:
+        """Evalúa la afinidad semántica y arquitectónica de cada candidato con un llamado ligero al LLM."""
+        work_catalog = [
+            {
+                "name": w.project_name,
+                "company": w.company,
+                "techs": w.technologies,
+                "summary": w.bullets[0] if w.bullets else "",
+            }
+            for w in work_candidates
+        ]
+        repo_catalog = [
+            {
+                "name": r.name,
+                "category": r.category or "",
+                "techs": r.technologies,
+                "summary": r.description or (r.bullets[0] if r.bullets else ""),
+            }
+            for r in repo_candidates
+        ]
+
+        schema_json = json.dumps(SemanticRerankResult.model_json_schema())
+        system_prompt = (
+            "You are an expert Technical Architect and Resume Strategist. "
+            "Evaluate the candidate's real work initiatives and GitHub repositories against the target job description. "
+            "Assign a `semantic_score` (0.0 to 15.0) based on deep architectural, domain, and technical relevance, "
+            "and provide a 1-sentence `match_reason` explaining why the project is relevant and what technical angle the writer should highlight.\n"
+            f"Return strictly valid JSON matching this schema:\n{schema_json}"
+        )
+        user_prompt = (
+            f"TARGET JOB TITLE: {job.job_title}\n"
+            f"MUST-HAVE SKILLS: {', '.join(job.must_have_skills)}\n"
+            f"NICE-TO-HAVE SKILLS: {', '.join(job.nice_to_have_skills)}\n"
+            f"RESPONSIBILITIES: {'; '.join(job.core_responsibilities)}\n"
+            f"ROLE SUMMARY: {job.role_summary}\n\n"
+            f"CANDIDATE WORK INITIATIVES:\n{json.dumps(work_catalog, ensure_ascii=False)}\n\n"
+            f"CANDIDATE GITHUB REPOSITORIES:\n{json.dumps(repo_catalog, ensure_ascii=False)}\n"
+        )
+
+        resp = await call_openrouter(
+            api_key=self.api_key,
+            models=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.1,
+            response_schema=SemanticRerankResult,
+            timeout=self.timeout,
+            http_transport=self.http_transport,
+        )
+        rerank = SemanticRerankResult.model_validate(resp.parse_json())
+
+        work_map = {item.name.strip().lower(): item for item in rerank.work_rankings}
+        for w in work_candidates:
+            w_key = w.project_name.strip().lower()
+            sem = work_map.get(w_key)
+            if sem:
+                w.match_score += float(sem.semantic_score)
+                if sem.match_reason.strip():
+                    w.match_reason = sem.match_reason.strip()
+                if sem.semantic_score >= 8.0 and "role:semantic_high_affinity" not in w.matching_skills:
+                    w.matching_skills.append("role:semantic_high_affinity")
+
+        repo_map = {item.name.strip().lower(): item for item in rerank.github_rankings}
+        for r in repo_candidates:
+            r_key = r.name.strip().lower()
+            sem = repo_map.get(r_key)
+            if sem:
+                r.match_score += float(sem.semantic_score)
+                if sem.match_reason.strip():
+                    r.match_reason = sem.match_reason.strip()
+                if sem.semantic_score >= 8.0 and "role:semantic_high_affinity" not in r.matching_skills:
+                    r.matching_skills.append("role:semantic_high_affinity")

@@ -165,6 +165,7 @@
 
 /* ==========================================================================
    Print Styles for High-Fidelity PDF Export (resume.lol specification)
+   Soporte completo multi-página sin cortes artificiales
    ========================================================================== */
 @media print {
   @page {
@@ -176,6 +177,10 @@
   body {
     margin: 0 !important;
     padding: 0 !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
     background: #ffffff !important;
     color: #000000 !important;
     font-size: 10.5pt !important;
@@ -183,70 +188,108 @@
     print-color-adjust: exact !important;
   }
 
-  /* Ocultar elementos interactivos de la aplicación */
+  /* Ocultar elementos interactivos y paneles de control */
   header,
   aside,
   nav,
   button,
   textarea,
   input,
-  .no-print {
+  .no-print,
+  [data-no-print],
+  .print\:hidden,
+  [class*="print:hidden"] {
     display: none !important;
+    visibility: hidden !important;
   }
 
-  /* El contenedor raíz debe anular scrolls y fondos */
+  /* CRÍTICO: Desactivar restricciones de altura fija, scroll y overflow
+     en la jerarquía de layout de la app para permitir paginación multi-página */
   #root,
-  main {
-    margin: 0 !important;
-    padding: 0 !important;
-    background: transparent !important;
-    height: auto !important;
-    min-height: auto !important;
-    overflow: visible !important;
-  }
-
-  /* Contenedores de layout */
+  #root > div,
+  main,
+  main > div,
   .resume-print-wrapper {
     display: block !important;
     width: 100% !important;
     height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  /* Desactivar clases de Tailwind que bloquean paginación */
+  .h-screen,
+  .h-full,
+  .overflow-hidden,
+  .overflow-y-auto,
+  .flex-1 {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Contenedores de layout para impresión */
+  .resume-print-wrapper {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
     background: transparent !important;
   }
 
-  /* Hoja de vida limpia sin sombras ni bordes simulados */
+  /* Hoja de vida limpia que fluye a través de múltiples páginas con fidelidad vectorial */
   .resume-paper {
+    display: block !important;
     box-shadow: none !important;
     border: none !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
-    min-height: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
     background-color: #ffffff !important;
     color: #000000 !important;
     border-radius: 0 !important;
   }
 
-  /* Asegurar que enlaces mantengan color negro sin decoraciones extrañas */
+  /* Enlaces en negro con subrayado nativo */
   .resume-paper a {
     color: #000000 !important;
     text-decoration: underline !important;
   }
 
-  /* Prevenir saltos de página huérfanos dentro de elementos clave */
+  /* Prevenir títulos huérfanos al final de página */
+  .resume-paper h1,
   .resume-paper h2,
   .resume-paper h3,
   .resume-paper h4 {
-    page-break-after: avoid;
-    break-after: avoid;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
   }
 
+  /* Prevenir partir un bullet individual (li) por la mitad entre dos páginas */
+  .resume-paper li {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Permitir explícitamente que las listas fluyan a través de saltos de página */
   .resume-paper ul {
-    page-break-inside: avoid;
-    break-inside: avoid;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
   }
 }
+
 

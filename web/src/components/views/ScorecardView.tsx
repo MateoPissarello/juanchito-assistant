@@ -102,6 +102,72 @@ export const ScorecardView: React.FC<ScorecardViewProps> = ({ evaluation }) => {
             </div>
           </div>
 
+          {/* Trazabilidad Determinista de Habilidades (Verificadas vs. Brechas No Alucinadas) */}
+          {((evaluation.matched_job_skills && evaluation.matched_job_skills.length > 0) ||
+            (evaluation.missing_owned_skills && evaluation.missing_owned_skills.length > 0) ||
+            (evaluation.unowned_job_skills && evaluation.unowned_job_skills.length > 0)) && (
+            <div className="p-3 rounded bg-zinc-50 dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+              <h4 className="text-[11px] font-semibold text-zinc-900 dark:text-zinc-200">
+                Trazabilidad Factual de Habilidades (Perfil SQLite vs. Vacante)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {evaluation.matched_job_skills && evaluation.matched_job_skills.length > 0 && (
+                  <div>
+                    <span className="text-[10px] font-mono uppercase text-emerald-600 dark:text-emerald-400 block mb-1">
+                      Incluidas en el CV ({evaluation.matched_job_skills.length})
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {evaluation.matched_job_skills.map((s, idx) => (
+                        <span
+                          key={idx}
+                          className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80"
+                        >
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {evaluation.missing_owned_skills && evaluation.missing_owned_skills.length > 0 && (
+                  <div>
+                    <span className="text-[10px] font-mono uppercase text-amber-600 dark:text-amber-400 block mb-1">
+                      En tu Perfil pero Omitidas ({evaluation.missing_owned_skills.length})
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {evaluation.missing_owned_skills.map((s, idx) => (
+                        <span
+                          key={idx}
+                          className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80"
+                        >
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {evaluation.unowned_job_skills && evaluation.unowned_job_skills.length > 0 && (
+                  <div>
+                    <span className="text-[10px] font-mono uppercase text-zinc-500 dark:text-zinc-400 block mb-1">
+                      No Poseídas / No Alucinadas ({evaluation.unowned_job_skills.length})
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {evaluation.unowned_job_skills.map((s, idx) => (
+                        <span
+                          key={idx}
+                          className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-zinc-200/70 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-700"
+                        >
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Fortalezas y Recomendaciones */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
             {evaluation.strengths.length > 0 && (

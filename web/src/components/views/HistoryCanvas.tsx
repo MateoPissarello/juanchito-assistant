@@ -192,9 +192,9 @@ export const HistoryCanvas: React.FC<HistoryCanvasProps> = ({ onNavigateToStudio
   };
 
   return (
-    <div className="h-full flex overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+    <div className="h-full flex overflow-hidden bg-zinc-50 dark:bg-zinc-950 print:h-auto print:overflow-visible print:block print:bg-white">
       {/* Left Master Pane: Search and List */}
-      <div className="w-80 border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col shrink-0 overflow-hidden print:hidden">
+      <div className="w-80 border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col shrink-0 overflow-hidden print:hidden no-print">
         {/* Search & Filters Header */}
         <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 space-y-2 bg-zinc-50/50 dark:bg-zinc-900/50">
           <div className="flex items-center justify-between">
@@ -382,7 +382,7 @@ export const HistoryCanvas: React.FC<HistoryCanvasProps> = ({ onNavigateToStudio
         {selectedDetail && !loadingDetail && (
           <>
             {/* Top Engineering Toolbar for Selected Resume */}
-            <div className="p-3 sm:px-5 sm:py-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0 flex flex-wrap items-center justify-between gap-3 print:hidden">
+            <div className="p-3 sm:px-5 sm:py-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0 flex flex-wrap items-center justify-between gap-3 print:hidden no-print">
               {/* Company, Role & ATS Score Summary */}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center space-x-2">
@@ -537,7 +537,7 @@ export const HistoryCanvas: React.FC<HistoryCanvasProps> = ({ onNavigateToStudio
                     <button
                       type="button"
                       onClick={handlePrintPdf}
-                      title="Exportar / Imprimir currículum en PDF vectorial de 1 página"
+                      title="Exportar / Imprimir currículum en PDF vectorial de alta fidelidad (soporta múltiples páginas)"
                       className="inline-flex items-center space-x-1.5 px-3 py-1 rounded text-xs font-medium border border-emerald-600 dark:border-emerald-500 bg-emerald-600 dark:bg-emerald-500 text-white hover:bg-emerald-700 dark:hover:bg-emerald-600 transition-colors shadow-xs cursor-pointer"
                     >
                       <Printer className="w-3.5 h-3.5" />
@@ -565,12 +565,12 @@ export const HistoryCanvas: React.FC<HistoryCanvasProps> = ({ onNavigateToStudio
 
             {/* Content View Body */}
             {activeTab === 'cv' ? (
-              <div className="flex-1 flex overflow-hidden print:overflow-visible print:block">
+              <div className="flex-1 flex overflow-hidden print:overflow-visible print:block print:h-auto">
                 {/* Left Panel: Markdown Viewer */}
                 <div
                   className={`flex-1 flex flex-col border-r border-zinc-200 dark:border-zinc-800 bg-zinc-900 text-zinc-100 ${
                     viewMode === 'markdown' ? 'w-full' : viewMode === 'split' ? 'w-1/2' : 'hidden'
-                  } print:hidden`}
+                  } print:hidden no-print`}
                 >
                   <div className="px-3 py-1.5 bg-zinc-950 text-zinc-400 font-mono text-[11px] border-b border-zinc-800 flex justify-between items-center">
                     <span>{selectedDetail.filename}</span>
@@ -592,15 +592,15 @@ export const HistoryCanvas: React.FC<HistoryCanvasProps> = ({ onNavigateToStudio
                       : viewMode === 'split'
                       ? 'w-1/2'
                       : 'hidden print:block'
-                  } print:w-full print:bg-white print:overflow-visible print:p-0 print:m-0`}
+                  } print:w-full print:bg-white print:overflow-visible print:p-0 print:m-0 print:h-auto print:block`}
                 >
                   <LiveResumePreview markdown={selectedDetail.markdown} />
                 </div>
               </div>
             ) : (
               /* ATS Audit Scorecard View */
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-50 dark:bg-zinc-950">
-                <div className="max-w-4xl mx-auto space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-zinc-50 dark:bg-zinc-950 print:p-0 print:bg-white print:overflow-visible print:h-auto print:block">
+                <div className="max-w-4xl mx-auto space-y-4 print:hidden no-print">
                   {isAuditing && (
                     <div className="p-12 text-center text-zinc-500 font-mono text-xs space-y-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xs">
                       <Loader2 className="w-7 h-7 animate-spin mx-auto text-emerald-500" />
@@ -650,7 +650,7 @@ export const HistoryCanvas: React.FC<HistoryCanvasProps> = ({ onNavigateToStudio
                 </div>
 
                 {/* Hidden container for print support even when on ATS tab */}
-                <div className="hidden print:block print:w-full print:bg-white print:overflow-visible print:p-0 print:m-0">
+                <div className="hidden print:block print:w-full print:bg-white print:overflow-visible print:p-0 print:m-0 print:h-auto">
                   <LiveResumePreview markdown={selectedDetail.markdown} />
                 </div>
               </div>

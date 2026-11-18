@@ -5,10 +5,12 @@ import httpx
 from juanchito_assitant.config import (
     GEMINI_API_KEY,
     GEMINI_MODEL,
+    MODELS_LINKEDIN_PARSER,
     MODEL_LINKEDIN_PARSER,
     OPENROUTER_API_KEY,
     OPENROUTER_MODEL,
 )
+from juanchito_assitant.agents.llm_client import call_openrouter
 from juanchito_assitant.models.linkedin import LinkedInProfileExtract
 
 try:
@@ -28,7 +30,7 @@ class LinkedInParserAgent:
         self,
         provider: str | None = None,
         api_key: str | None = None,
-        model: str | None = None,
+        model: str | list[str] | None = None,
         client=None,
         http_transport: httpx.AsyncBaseTransport | None = None,
         timeout: float = 60.0,
@@ -47,7 +49,7 @@ class LinkedInParserAgent:
 
         if self.provider == "openrouter":
             self.api_key = api_key or OPENROUTER_API_KEY
-            self.model = model or MODEL_LINKEDIN_PARSER or OPENROUTER_MODEL
+            self.model = model or MODELS_LINKEDIN_PARSER
             self.gemini_client = None
         elif self.provider == "gemini":
             self.api_key = api_key or GEMINI_API_KEY
@@ -99,14 +101,7 @@ class LinkedInParserAgent:
             )
 
     async def _parse_openrouter(self, prompt: str) -> LinkedInProfileExtract:
-        """Envía la solicitud asíncrona a OpenRouter con esquema JSON estructurado."""
-        url = "https://openrouter.ai/api/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "HTTP-Referer": "https://github.com/MateoPissarello/juanchito-assitant",
-            "X-Title": "juanchito-assitant",
-            "Content-Type": "application/json",
-        }
+        """Envía la solicitud asíncrona a OpenRouter con esquema JSON estructurado usando llm_client resiliente."""
         schema_json = json.dumps(LinkedInProfileExtract.model_json_schema())
         system_prompt = (
             "You are an elite Senior Technical Recruiter and Career Architecture AI specialized in parsing LinkedIn profile exports. "
@@ -115,24 +110,19 @@ class LinkedInParserAgent:
             "Return ONLY the valid raw JSON object. Do not include markdown code block markers or conversational preamble."
         )
 
-        payload = {
-            "model": self.model,
-            "messages": [
+        response = await call_openrouter(
+            api_key=self.api_key,
+            models=self.model,
+            messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"},
-        }
-
-        async with httpx.AsyncClient(timeout=self.timeout, transport=self.http_transport) as client:
-            response = await client.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            content = data["choices"][0]["message"]["content"].strip()
-            if content.startswith("```"):
-                content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-            return LinkedInProfileExtract.model_validate_json(content)
+            temperature=0.1,
+            response_format={"type": "json_object"},
+            timeout=self.timeout,
+            http_transport=self.http_transport,
+        )
+        return LinkedInProfileExtract.model_validate(response.parse_json())
 
     async def _parse_gemini(self, prompt: str) -> LinkedInProfileExtract:
         """Envía la solicitud asíncrona a Google Gemini usando google-genai."""

@@ -1,4 +1,5 @@
 import type {
+  AuthStatusResponse,
   Certification,
   FullProfileData,
   PersonalInfo,
@@ -15,6 +16,9 @@ const API_BASE = '/api';
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
+    if (res.status === 401) {
+      window.dispatchEvent(new CustomEvent('juanchito:unauthorized'));
+    }
     let errorMsg = `Error ${res.status}: ${res.statusText}`;
     try {
       const errJson = await res.json();
@@ -28,6 +32,26 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 export const api = {
+  // Autenticación
+  getAuthStatus: (): Promise<AuthStatusResponse> =>
+    fetch(`${API_BASE}/auth/status`, { credentials: 'include' }).then((res) =>
+      handleResponse<AuthStatusResponse>(res)
+    ),
+
+  login: (username: string, password: string): Promise<AuthStatusResponse> =>
+    fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ username, password }),
+    }).then((res) => handleResponse<AuthStatusResponse>(res)),
+
+  logout: (): Promise<AuthStatusResponse> =>
+    fetch(`${API_BASE}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    }).then((res) => handleResponse<AuthStatusResponse>(res)),
+
   // Perfil Completo
   getProfile: (): Promise<FullProfileData> =>
     fetch(`${API_BASE}/profile`).then((res) => handleResponse<FullProfileData>(res)),

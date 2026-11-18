@@ -231,3 +231,124 @@ def test_resume_renderer_projects_fallback_from_context():
     assert "- Extracción distribuida de datos." in rendered
 
 
+def test_resume_renderer_full_spanish_localization():
+    from juanchito_assitant.models.profile import AdditionalAchievement
+
+    engine = create_engine("sqlite:///:memory:")
+    SQLModel.metadata.create_all(engine)
+    session = Session(engine)
+
+    session.add(PersonalInfo(full_name="Mateo Pissarello"))
+    session.add(
+        Certification(
+            issuer="Oracle",
+            title="Java Foundations Certificate",
+            issue_date="Apr. 2023",
+        )
+    )
+    session.add(
+        Certification(
+            issuer="Amazon Web Services (AWS)",
+            title="AWS Certified Solutions Architect - Associate",
+            issue_date="Dec. 2025",
+        )
+    )
+    session.add(
+        Education(
+            institution="Universidad Sergio Arboleda",
+            degree="B.Sc. in Computer Science & Artificial Intelligence",
+            date_range="Jul. 2022 – Present",
+            location="Bogotá, Colombia",
+        )
+    )
+    session.add(
+        AdditionalAchievement(
+            title="Programming Contest",
+            institution="Universidad Sergio Arboleda",
+            date_range="Nov. 2024",
+            location="Bogotá, Colombia",
+            description_bullets=[
+                "Participated in a [{MARATON}](https://www.usergioarboleda.edu.co/noticias/retos-talento-y-programacion-asi-fue-la-maraton-de-programacion-2024-2) competing against more than **25 teams** from engineering and mathematics programs. My team **SPICY achieved third place**."
+            ],
+        )
+    )
+    session.commit()
+
+    matcher = MatcherAgent(session)
+    job = JobRequirements(job_title="Desarrollador Backend", must_have_skills=["Java", "Python"], role_summary="Rol backend")
+    ctx = matcher.match(job)
+
+    rendered = ResumeRenderer.render(
+        headline="Ingeniero Backend Especializado",
+        profile_summary="Ingeniero de software con experiencia en microservicios.",
+        experiences=[
+            {
+                "company": "Blend360 Colombia",
+                "role": "Cloud Engineer",
+                "dates": "Nov. 2024 – Jan. 2026",
+                "location": "Bogotá, Colombia (On-site)",
+                "initiatives": [
+                    {
+                        "name": "Zammad on Kubernetes (EKS)",
+                        "bullets": ["Migré la plataforma **Zammad** a **Amazon EKS**."],
+                    }
+                ],
+            }
+        ],
+        skills={
+            "Languages": ["Java", "Python"],
+            "Databases": ["PostgreSQL", "Redis"],
+            "Backend": ["Spring Boot", "Microservices", "Event-Driven Architecture"],
+        },
+        matched_ctx=ctx,
+        language="es",
+        projects=[
+            {
+                "name": "cine_colombia",
+                "repo_url": "https://github.com/MateoPissarello/cine_colombia",
+                "technologies": ["Python", "FastAPI", "PostgreSQL"],
+                "year": "2025",
+                "bullets": [
+                    "Accomplished a robust backend system for cinema operations by developing RESTful APIs using **FastAPI** and **SQLAlchemy**."
+                ],
+            }
+        ],
+    )
+
+    # 1. Variable @MARATON en español
+    assert "@MARATON=Maratón de Programación" in rendered
+
+    # 2. Categorías y conceptos descriptivos de habilidades en español
+    assert "- **Lenguajes:** Java, Python" in rendered
+    assert "- **Bases de Datos:** PostgreSQL, Redis" in rendered
+    assert "Microservicios" in rendered
+    assert "Arquitectura Orientada a Eventos" in rendered
+
+    # 3. Roles, fechas, ubicaciones e iniciativas en español
+    assert "### Ingeniero Cloud" in rendered
+    assert "Nov. 2024 – Ene. 2026" in rendered
+    assert "Bogotá, Colombia (Presencial)" in rendered
+    assert "- **Zammad en Kubernetes (EKS)**" in rendered
+
+    # 4. Viñeta de proyecto de fallback traducida al español
+    assert "Desarrollé un sistema backend robusto para operaciones de cine" in rendered
+    assert "Accomplished a robust backend system" not in rendered
+
+    # 5. Certificaciones con nombres oficiales y fechas en español
+    assert "#### Java Foundations Certificate" in rendered
+    assert "Abr. 2023" in rendered
+    assert "Dic. 2025" in rendered
+
+    # 6. Educación en español con el título exacto acordado
+    assert "Jul. 2022 – Presente" in rendered
+    assert "#### Ingeniería en Ciencias de la Computación e Inteligencia Artificial" in rendered
+    assert "B.Sc. in Computer Science" not in rendered
+
+    # 7. Logros adicionales en español
+    assert "### Maratón de Programación" in rendered
+    assert "Participé en una [{MARATON}]" in rendered
+    assert "Mi equipo **SPICY obtuvo el tercer puesto**." in rendered
+    assert "Participated in a" not in rendered
+
+
+

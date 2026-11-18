@@ -15,8 +15,24 @@ class EvaluationResult(BaseModel):
     strengths: list[str] = Field(default_factory=list)
     critical_weaknesses: list[str] = Field(default_factory=list)
     actionable_improvements: list[str] = Field(default_factory=list)
+    matched_job_skills: list[str] = Field(
+        default_factory=list,
+        description="Habilidades requeridas por la vacante que están presentes en el CV generado.",
+    )
+    missing_owned_skills: list[str] = Field(
+        default_factory=list,
+        description="Habilidades requeridas por la vacante que el candidato SÍ posee en SQLite pero fueron omitidas en el CV.",
+    )
+    unowned_job_skills: list[str] = Field(
+        default_factory=list,
+        description="Habilidades requeridas por la vacante que el candidato NO posee en SQLite (brechas reales no alucinables).",
+    )
 
 class IterationRecord(BaseModel):
     iteration: int
     generated_markdown: str
     evaluation: EvaluationResult
+    guardrail_alerts: list[str] = Field(
+        default_factory=list,
+        description="Alertas de FactualGuardrail por elementos o tecnologías no verificadas purgadas en esta iteración.",
+    )

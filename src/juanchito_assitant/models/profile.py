@@ -124,6 +124,26 @@ class AdditionalAchievement(SQLModel, table=True):
     links: list[dict[str, str]] = Field(default_factory=list, sa_column=Column(JSON))
 
 
+class GeneratedResume(SQLModel, table=True):
+    """Historial persistente en base de datos de currículums generados y sus auditorías ATS."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    filename: str = Field(index=True, unique=True)  # Ej: "resume_GitLab_Backend_Engineer_20261103_101241.md"
+    company: str = Field(index=True)
+    role: str
+    language: str = "en"
+    headline: str | None = None
+    markdown_content: str
+    word_count: int = 0
+    size_bytes: int = 0
+    ats_score: int | None = None
+    ats_decision: str | None = None
+    job_payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    evaluation_payload: dict | None = Field(default=None, sa_column=Column(JSON))
+    created_at: str  # "YYYY-MM-DD HH:MM"
+    timestamp_raw: str = Field(default="", index=True)  # "YYYYMMDD_HHMMSS"
+
+
 class FullProfile(SQLModel):
     """Vista agregada en memoria de todo el perfil para los agentes."""
 

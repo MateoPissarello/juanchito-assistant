@@ -11,11 +11,17 @@ import { SkillsCanvas } from './components/views/SkillsCanvas';
 import { CertsCanvas } from './components/views/CertsCanvas';
 import { TailoringStudioCanvas } from './components/views/TailoringStudioCanvas';
 import { HistoryCanvas } from './components/views/HistoryCanvas';
-import type { FullProfileData, WorkExperience } from './types/profile';
+import { LoginView } from './components/views/LoginView';
+import type { AuthStatusResponse, FullProfileData, WorkExperience } from './types/profile';
 import { api } from './services/api';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
-export const WorkbenchApp: React.FC = () => {
+interface WorkbenchAppProps {
+  authEnabled: boolean;
+  onLogout: () => void;
+}
+
+export const WorkbenchApp: React.FC<WorkbenchAppProps> = ({ authEnabled, onLogout }) => {
   const [profile, setProfile] = useState<FullProfileData | null>(null);
   const [historyCount, setHistoryCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -105,7 +111,7 @@ export const WorkbenchApp: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans">
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans print:h-auto print:w-full print:overflow-visible print:block print:bg-white">
       {/* Top Engineering Bar */}
       <TopBar
         breadcrumbs={getBreadcrumbs()}
@@ -114,10 +120,12 @@ export const WorkbenchApp: React.FC = () => {
           setIsCreatingCompany(false);
           setNav({ view: 'tailor' });
         }}
+        authEnabled={authEnabled}
+        onLogout={onLogout}
       />
 
       {/* Main Workbench Body: Sidebar + Editor Canvas */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden print:h-auto print:overflow-visible print:block">
         {/* Left Sidebar */}
         <Sidebar
           currentNav={nav}
@@ -135,7 +143,7 @@ export const WorkbenchApp: React.FC = () => {
         />
 
         {/* Central Editor Canvas */}
-        <main className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-zinc-950/40">
+        <main className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-zinc-950/40 print:h-auto print:overflow-visible print:block print:bg-white print:p-0 print:m-0">
           {loading && (
             <div className="flex flex-col items-center justify-center h-full text-zinc-400 space-y-2 font-mono text-xs">
               <Loader2 className="w-5 h-5 animate-spin text-zinc-600 dark:text-zinc-400" />
@@ -164,7 +172,7 @@ export const WorkbenchApp: React.FC = () => {
           )}
 
           {!loading && profile && (
-            <div className="h-full">
+            <div className="h-full print:h-auto print:overflow-visible print:block">
               {nav.view === 'personal' && (
                 <PersonalHeaderCanvas
                   personal={profile.personal}
@@ -251,9 +259,50 @@ export const WorkbenchApp: React.FC = () => {
 };
 
 export default function App() {
+  const [authState, setAuthState] = useState<AuthStatusResponse | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    api
+      .getAuthStatus()
+      .then((res) => setAuthState(res))
+      .catch(() => {
+        // Fallback: si el backend no está disponible aún, dejar que WorkbenchApp muestre su error de conexión
+        setAuthState({ authenticated: true, auth_enabled: false });
+      })
+      .finally(() => setCheckingAuth(false));
+
+    const handleUnauthorized = () => {
+      setAuthState({ authenticated: false, auth_enabled: true });
+    };
+    window.addEventListener('juanchito:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('juanchito:unauthorized', handleUnauthorized);
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      const next = await api.logout();
+      setAuthState(next);
+    } catch (_) {
+      setAuthState({ authenticated: false, auth_enabled: true });
+    }
+  };
+
   return (
     <ThemeProvider>
-      <WorkbenchApp />
+      {checkingAuth ? (
+        <div className="h-screen w-screen flex items-center justify-center bg-zinc-100 dark:bg-zinc-950 text-zinc-400 font-mono text-xs space-x-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span>verifying session...</span>
+        </div>
+      ) : authState && authState.auth_enabled && !authState.authenticated ? (
+        <LoginView onSuccess={(status) => setAuthState(status)} />
+      ) : (
+        <WorkbenchApp
+          authEnabled={Boolean(authState?.auth_enabled)}
+          onLogout={handleLogout}
+        />
+      )}
     </ThemeProvider>
   );
 }

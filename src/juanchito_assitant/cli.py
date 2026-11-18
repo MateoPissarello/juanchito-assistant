@@ -48,9 +48,11 @@ app = typer.Typer(
 )
 sync_app = typer.Typer(help="Sincronización inteligente de fuentes externas (GitHub, LinkedIn).")
 repo_app = typer.Typer(help="Administración de repositorios seguidos en SQLite para sincronización.")
+db_app = typer.Typer(help="Migración y sincronización de base de datos local hacia la nube (PostgreSQL/Neon/Render).")
 
 app.add_typer(sync_app, name="sync")
 app.add_typer(repo_app, name="repo")
+app.add_typer(db_app, name="db")
 
 console = Console()
 
@@ -714,6 +716,72 @@ def web(
         threading.Thread(target=_open, daemon=True).start()
 
     uvicorn.run("juanchito_assitant.web.app:app", host=host, port=port, reload=reload)
+
+
+# ----------------------------------------------------------------------
+# 8. SUBCOMANDOS: DB (Sincronización Local -> Cloud PostgreSQL / Render)
+# ----------------------------------------------------------------------
+@db_app.command(name="push")
+def db_push_cmd(
+    target_url: Annotated[
+        str | None,
+        typer.Option(
+            "--target-url",
+            "-t",
+            envvar="DATABASE_URL",
+            help="URL de conexión PostgreSQL destino (por defecto lee DATABASE_URL)",
+        ),
+    ] = None,
+    source_db: Annotated[
+        Path,
+        typer.Option("--source-db", "-s", help="Ruta al archivo SQLite local fuente"),
+    ] = DB_PATH,
+    outputs_dir: Annotated[
+        Path,
+        typer.Option("--outputs-dir", "-o", help="Directorio de archivos Markdown/JSON generados"),
+    ] = OUTPUTS_DIR,
+):
+    """Sube todo tu perfil local (SQLite) y tu historial de CVs (data/outputs/) a la DB en la nube."""
+    from juanchito_assitant.db.cloud_sync import push_local_to_target_db
+
+    if not target_url or not target_url.strip():
+        console.print(
+            "[bold red]Error:[/] Debes proporcionar [cyan]--target-url[/] o configurar [cyan]DATABASE_URL[/] en tu entorno/.env."
+        )
+        raise typer.Exit(code=1)
+
+    if not source_db.exists():
+        console.print(f"[bold red]Error:[/] No se encontró la base de datos fuente en {source_db}")
+        raise typer.Exit(code=1)
+
+    console.print("[bold cyan]🚀 Sincronizando perfil e historial de CVs hacia la base de datos destino...[/]")
+    counts = push_local_to_target_db(
+        target_url=target_url,
+        source_db_path=source_db,
+        outputs_dir=outputs_dir,
+    )
+
+    table = Table(title="Resumen de Sincronización hacia la Nube", show_header=True, header_style="bold magenta")
+    table.add_column("Entidad", style="cyan")
+    table.add_column("Registros Sincronizados", justify="right", style="bold green")
+
+    labels = {
+        "personal": "Información Personal",
+        "experiences": "Empresas (WorkExperience)",
+        "work_projects": "Iniciativas Laborales (WorkProject)",
+        "personal_projects": "Proyectos de GitHub Analizados",
+        "tracked_repos": "Repositorios Seguidos (TrackedRepo)",
+        "certifications": "Certificaciones",
+        "education": "Educación",
+        "skills": "Categorías de Habilidades",
+        "achievements": "Logros Adicionales",
+        "generated_resumes": "Currículums en Historial (GeneratedResume)",
+    }
+    for key, label in labels.items():
+        table.add_row(label, str(counts.get(key, 0)))
+
+    console.print(table)
+    console.print("[bold green]✓ ¡Base de datos en la nube actualizada al 100%![/]")
 
 
 # ----------------------------------------------------------------------
