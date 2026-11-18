@@ -31,6 +31,9 @@ export const WorkbenchApp: React.FC<WorkbenchAppProps> = ({ authEnabled, onLogou
   // Navigation State
   const [nav, setNav] = useState<NavigationTarget>({ view: 'personal' });
   const [isCreatingCompany, setIsCreatingCompany] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
 
   const loadData = async () => {
     setLoading(true);
@@ -122,10 +125,12 @@ export const WorkbenchApp: React.FC<WorkbenchAppProps> = ({ authEnabled, onLogou
         }}
         authEnabled={authEnabled}
         onLogout={onLogout}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
       />
 
       {/* Main Workbench Body: Sidebar + Editor Canvas */}
-      <div className="flex-1 flex overflow-hidden print:h-auto print:overflow-visible print:block">
+      <div className="flex-1 flex overflow-hidden relative print:h-auto print:overflow-visible print:block">
         {/* Left Sidebar */}
         <Sidebar
           currentNav={nav}
@@ -140,6 +145,8 @@ export const WorkbenchApp: React.FC<WorkbenchAppProps> = ({ authEnabled, onLogou
           certCount={profile?.certifications.length || 0}
           historyCount={historyCount}
           onNewCompany={handleStartNewCompany}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
         />
 
         {/* Central Editor Canvas */}

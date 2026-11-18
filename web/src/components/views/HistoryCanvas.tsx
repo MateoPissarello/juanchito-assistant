@@ -41,7 +41,10 @@ export const HistoryCanvas: React.FC<HistoryCanvasProps> = ({ onNavigateToStudio
 
   // UI Tabs & View Mode
   const [activeTab, setActiveTab] = useState<'cv' | 'ats'>('cv');
-  const [viewMode, setViewMode] = useState<'split' | 'preview' | 'markdown'>('split');
+  const [viewMode, setViewMode] = useState<'split' | 'preview' | 'markdown'>(() =>
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 'preview' : 'split'
+  );
+  const [mobileShowList, setMobileShowList] = useState<boolean>(true);
   const [copied, setCopied] = useState(false);
 
   // Auditing state
@@ -194,7 +197,11 @@ export const HistoryCanvas: React.FC<HistoryCanvasProps> = ({ onNavigateToStudio
   return (
     <div className="h-full flex overflow-hidden bg-zinc-50 dark:bg-zinc-950 print:h-auto print:overflow-visible print:block print:bg-white">
       {/* Left Master Pane: Search and List */}
-      <div className="w-80 border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col shrink-0 overflow-hidden print:hidden no-print">
+      <div
+        className={`w-full md:w-80 border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex-col shrink-0 overflow-hidden print:hidden no-print ${
+          mobileShowList ? 'flex' : 'hidden md:flex'
+        }`}
+      >
         {/* Search & Filters Header */}
         <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 space-y-2 bg-zinc-50/50 dark:bg-zinc-900/50">
           <div className="flex items-center justify-between">
@@ -285,7 +292,10 @@ export const HistoryCanvas: React.FC<HistoryCanvasProps> = ({ onNavigateToStudio
               <button
                 key={item.filename}
                 type="button"
-                onClick={() => setSelectedFilename(item.filename)}
+                onClick={() => {
+                  setSelectedFilename(item.filename);
+                  setMobileShowList(false);
+                }}
                 className={`w-full text-left p-3 transition-colors flex flex-col space-y-1.5 ${
                   isSelected
                     ? 'bg-zinc-100 dark:bg-zinc-800/90 border-l-2 border-emerald-600 dark:border-emerald-400'
@@ -357,7 +367,11 @@ export const HistoryCanvas: React.FC<HistoryCanvasProps> = ({ onNavigateToStudio
       </div>
 
       {/* Right Detail Pane: View & Action Hub */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-zinc-100 dark:bg-zinc-950">
+      <div
+        className={`flex-1 flex-col overflow-hidden bg-zinc-100 dark:bg-zinc-950 ${
+          mobileShowList ? 'hidden md:flex' : 'flex'
+        }`}
+      >
         {loadingDetail && (
           <div className="flex-1 flex flex-col items-center justify-center text-zinc-400 font-mono text-xs space-y-2">
             <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
@@ -386,6 +400,13 @@ export const HistoryCanvas: React.FC<HistoryCanvasProps> = ({ onNavigateToStudio
               {/* Company, Role & ATS Score Summary */}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setMobileShowList(true)}
+                    className="md:hidden px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-[11px] font-mono text-zinc-700 dark:text-zinc-300 shrink-0"
+                  >
+                    ← Lista
+                  </button>
                   <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
                     {selectedDetail.company}
                   </h2>

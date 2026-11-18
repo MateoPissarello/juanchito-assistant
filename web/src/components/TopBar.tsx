@@ -1,5 +1,5 @@
 import React from 'react';
-import { Moon, Sun, Database, ExternalLink, Sparkles, LogOut } from 'lucide-react';
+import { Moon, Sun, Database, ExternalLink, Sparkles, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 interface TopBarProps {
@@ -8,6 +8,8 @@ interface TopBarProps {
   onOpenTailor: () => void;
   authEnabled?: boolean;
   onLogout?: () => void;
+  sidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -16,14 +18,32 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenTailor,
   authEnabled = false,
   onLogout,
+  sidebarOpen = true,
+  onToggleSidebar,
 }) => {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <header className="h-12 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex items-center justify-between px-4 select-none shrink-0 z-30 print:hidden">
-      {/* Left: Brand Badge & Breadcrumbs */}
-      <div className="flex items-center space-x-3">
-        <div className="flex items-center space-x-1.5 font-mono text-xs font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+    <header className="h-12 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex items-center justify-between px-3 sm:px-4 select-none shrink-0 z-30 print:hidden">
+      {/* Left: Sidebar Toggle, Brand Badge & Breadcrumbs */}
+      <div className="flex items-center space-x-2.5 min-w-0">
+        {onToggleSidebar && (
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            title={sidebarOpen ? 'Ocultar menú lateral' : 'Mostrar menú lateral'}
+            aria-label={sidebarOpen ? 'Ocultar menú lateral' : 'Mostrar menú lateral'}
+            className="p-1.5 -ml-1 rounded text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors focus-visible:ring-1 focus-visible:ring-zinc-400 focus-visible:outline-none cursor-pointer"
+          >
+            {sidebarOpen ? (
+              <PanelLeftClose className="w-4 h-4" />
+            ) : (
+              <PanelLeftOpen className="w-4 h-4" />
+            )}
+          </button>
+        )}
+
+        <div className="flex items-center space-x-1.5 font-mono text-xs font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 shrink-0">
           <span className="w-2 h-2 bg-zinc-900 dark:bg-zinc-100 rounded-xs" />
           <span>juanchito</span>
           <span className="text-zinc-400 font-normal">/</span>
